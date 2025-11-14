@@ -1,0 +1,579 @@
+use eventsource_stream::Eventsource;
+use futures_util::Stream;
+use futures_util::StreamExt;
+use reqwest::header::HeaderMap;
+use reqwest::{Client as ReqwestClient, Error as ReqwestError};
+use serde::{Deserialize, Serialize};
+use stakpak_shared::models::integrations::openai::{
+    AgentModel, ChatCompletionResponse, ChatCompletionStreamResponse, ChatMessage, MessageContent,
+    Role, Tool, ToolCall, ToolCallDelta, ChatMessageDelta, ChatCompletionChoice,
+    ChatCompletionStreamChoice, Usage, FinishReason, FunctionCall, FunctionCallDelta,
+    PromptTokensDetails,
+};
+use stakpak_shared::tls_client::TlsClientConfig;
+use stakpak_shared::tls_client::create_tls_client;
+use super::ApiStreamError;
+
+const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+
+#[derive(Clone, Debug)]
+pub struct AnthropicClient {
+    client: ReqwestClient,
+    api_key: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct AnthropicClientConfig {
+    pub api_key: String,
+}
+
+#[derive(Serialize, Debug)]
+struct AnthropicRequest {
+    model: String,
+    messages: Vec<AnthropicMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stream: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<AnthropicTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct AnthropicMessage {
+    role: String,
+    content: AnthropicContent,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+enum AnthropicContent {
+    Text(String),
+    Blocks(Vec<AnthropicContentBlock>),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type")]
+enum AnthropicContentBlock {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        is_error: Option<bool>,
+    },
+}
+
+#[derive(Serialize, Debug, Clone)]
+struct AnthropicTool {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    input_schema: serde_json::Value,
+}
+
+#[derive(Deserialize, Debug)]
+struct AnthropicResponse {
+    id: String,
+    #[serde(rename = "type")]
+    response_type: String,
+    role: String,
+    content: Vec<AnthropicContentBlock>,
+    model: String,
+    stop_reason: Option<String>,
+    usage: AnthropicUsage,
+}
+
+#[derive(Deserialize, Debug)]
+struct AnthropicUsage {
+    input_tokens: u32,
+    output_tokens: u32,
+}
+
+#[derive(Deserialize, Debug)]
+struct AnthropicStreamEvent {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(flatten)]
+    data: serde_json::Value,
+}
+
+impl AnthropicClient {
+    pub fn new(config: &AnthropicClientConfig) -> Result<Self, String> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-api-key",
+            config.api_key.parse().map_err(|e| format!("Invalid API key format: {}", e))?,
+        );
+        headers.insert(
+            "anthropic-version",
+            ANTHROPIC_VERSION.parse().map_err(|e| format!("Invalid version header: {}", e))?,
+        );
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            "application/json".parse().map_err(|e| format!("Invalid content type: {}", e))?,
+        );
+        headers.insert(
+            reqwest::header::USER_AGENT,
+            format!("Stakpak/{}", env!("CARGO_PKG_VERSION"))
+                .parse()
+                .map_err(|e| format!("Invalid user agent: {}", e))?,
+        );
+
+        let client = create_tls_client(
+            TlsClientConfig::default()
+                .with_headers(headers)
+                .with_timeout(std::time::Duration::from_secs(300)),
+        )?;
+
+        Ok(Self {
+            client,
+            api_key: config.api_key.clone(),
+        })
+    }
+
+    fn map_model_to_anthropic(model: &AgentModel) -> String {
+        match model {
+            AgentModel::Smart => "claude-sonnet-4-20250514".to_string(),
+            AgentModel::Eco => "claude-haiku-4-20250605".to_string(),
+        }
+    }
+
+    fn convert_messages_to_anthropic(
+        messages: Vec<ChatMessage>,
+    ) -> Result<(Vec<AnthropicMessage>, Option<String>), String> {
+        let mut anthropic_messages = Vec::new();
+        let mut system_message = None;
+
+        for msg in messages {
+            match msg.role {
+                Role::System => {
+                    // Extract system message - Anthropic handles it separately
+                    if let Some(content) = msg.content {
+                        system_message = Some(content.to_string());
+                    }
+                }
+                Role::User => {
+                    let content = match msg.content {
+                        Some(MessageContent::String(text)) => AnthropicContent::Text(text),
+                        Some(MessageContent::Array(parts)) => {
+                            let blocks: Vec<AnthropicContentBlock> = parts
+                                .into_iter()
+                                .filter_map(|part| {
+                                    part.text.map(|text| AnthropicContentBlock::Text { text })
+                                })
+                                .collect();
+                            AnthropicContent::Blocks(blocks)
+                        }
+                        None => AnthropicContent::Text(String::new()),
+                    };
+                    anthropic_messages.push(AnthropicMessage {
+                        role: "user".to_string(),
+                        content,
+                    });
+                }
+                Role::Assistant => {
+                    let mut blocks = Vec::new();
+
+                    // Add text content if present
+                    if let Some(content) = msg.content {
+                        match content {
+                            MessageContent::String(text) if !text.is_empty() => {
+                                blocks.push(AnthropicContentBlock::Text { text });
+                            }
+                            MessageContent::Array(parts) => {
+                                for part in parts {
+                                    if let Some(text) = part.text {
+                                        if !text.is_empty() {
+                                            blocks.push(AnthropicContentBlock::Text { text });
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // Add tool calls if present
+                    if let Some(tool_calls) = msg.tool_calls {
+                        for tool_call in tool_calls {
+                            let input: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                                .unwrap_or(serde_json::json!({}));
+                            blocks.push(AnthropicContentBlock::ToolUse {
+                                id: tool_call.id,
+                                name: tool_call.function.name,
+                                input,
+                            });
+                        }
+                    }
+
+                    if !blocks.is_empty() {
+                        anthropic_messages.push(AnthropicMessage {
+                            role: "assistant".to_string(),
+                            content: AnthropicContent::Blocks(blocks),
+                        });
+                    }
+                }
+                Role::Tool => {
+                    // Tool result message
+                    if let Some(tool_call_id) = msg.tool_call_id {
+                        let content_text = msg.content
+                            .map(|c| c.to_string())
+                            .unwrap_or_default();
+
+                        anthropic_messages.push(AnthropicMessage {
+                            role: "user".to_string(),
+                            content: AnthropicContent::Blocks(vec![
+                                AnthropicContentBlock::ToolResult {
+                                    tool_use_id: tool_call_id,
+                                    content: content_text,
+                                    is_error: None,
+                                }
+                            ]),
+                        });
+                    }
+                }
+                _ => {
+                    // Skip other roles
+                }
+            }
+        }
+
+        Ok((anthropic_messages, system_message))
+    }
+
+    fn convert_tools_to_anthropic(tools: Option<Vec<Tool>>) -> Option<Vec<AnthropicTool>> {
+        tools.map(|tools_vec| {
+            tools_vec
+                .into_iter()
+                .map(|tool| AnthropicTool {
+                    name: tool.function.name,
+                    description: tool.function.description,
+                    input_schema: tool.function.parameters,
+                })
+                .collect()
+        })
+    }
+
+    fn convert_anthropic_response_to_openai(
+        response: AnthropicResponse,
+    ) -> ChatCompletionResponse {
+        let mut text_content = Vec::new();
+        let mut tool_calls = Vec::new();
+
+        for block in response.content {
+            match block {
+                AnthropicContentBlock::Text { text } => {
+                    text_content.push(text);
+                }
+                AnthropicContentBlock::ToolUse { id, name, input } => {
+                    tool_calls.push(ToolCall {
+                        id,
+                        r#type: "function".to_string(),
+                        function: FunctionCall {
+                            name,
+                            arguments: input.to_string(),
+                        },
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        let content = if !text_content.is_empty() {
+            Some(MessageContent::String(text_content.join("\n")))
+        } else {
+            None
+        };
+
+        let tool_calls_opt = if !tool_calls.is_empty() {
+            Some(tool_calls)
+        } else {
+            None
+        };
+
+        let finish_reason = match response.stop_reason.as_deref() {
+            Some("end_turn") => FinishReason::Stop,
+            Some("max_tokens") => FinishReason::Length,
+            Some("tool_use") => FinishReason::ToolCalls,
+            _ => FinishReason::Stop,
+        };
+
+        ChatCompletionResponse {
+            id: response.id,
+            object: "chat.completion".to_string(),
+            created: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            model: match response.model.as_str() {
+                m if m.contains("sonnet") => AgentModel::Smart,
+                m if m.contains("haiku") => AgentModel::Eco,
+                _ => AgentModel::Smart,
+            },
+            choices: vec![ChatCompletionChoice {
+                index: 0,
+                message: ChatMessage {
+                    role: Role::Assistant,
+                    content,
+                    name: None,
+                    tool_calls: tool_calls_opt,
+                    tool_call_id: None,
+                },
+                logprobs: None,
+                finish_reason,
+            }],
+            usage: Usage {
+                prompt_tokens: response.usage.input_tokens,
+                completion_tokens: response.usage.output_tokens,
+                total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+                prompt_tokens_details: Some(PromptTokensDetails {
+                    input_tokens: Some(response.usage.input_tokens),
+                    output_tokens: Some(response.usage.output_tokens),
+                    cache_read_input_tokens: None,
+                    cache_write_input_tokens: None,
+                }),
+            },
+            system_fingerprint: None,
+        }
+    }
+
+    pub async fn chat_completion(
+        &self,
+        model: AgentModel,
+        messages: Vec<ChatMessage>,
+        tools: Option<Vec<Tool>>,
+    ) -> Result<ChatCompletionResponse, String> {
+        let (anthropic_messages, system_message) = Self::convert_messages_to_anthropic(messages)?;
+        let anthropic_tools = Self::convert_tools_to_anthropic(tools);
+
+        let request = AnthropicRequest {
+            model: Self::map_model_to_anthropic(&model),
+            messages: anthropic_messages,
+            max_tokens: Some(8192), // Default max tokens for Anthropic
+            temperature: None,
+            top_p: None,
+            stream: Some(false),
+            tools: anthropic_tools,
+            system: system_message,
+        };
+
+        let response = self
+            .client
+            .post(ANTHROPIC_API_URL)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e: ReqwestError| e.to_string())?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Anthropic API error ({}): {}", status, error_text));
+        }
+
+        let anthropic_response: AnthropicResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
+
+        Ok(Self::convert_anthropic_response_to_openai(anthropic_response))
+    }
+
+    pub async fn chat_completion_stream(
+        &self,
+        model: AgentModel,
+        messages: Vec<ChatMessage>,
+        tools: Option<Vec<Tool>>,
+        _headers: Option<HeaderMap>,
+    ) -> Result<
+        (
+            impl Stream<Item = Result<ChatCompletionStreamResponse, ApiStreamError>>,
+            Option<String>,
+        ),
+        String,
+    > {
+        let (anthropic_messages, system_message) = Self::convert_messages_to_anthropic(messages)?;
+        let anthropic_tools = Self::convert_tools_to_anthropic(tools);
+
+        let request = AnthropicRequest {
+            model: Self::map_model_to_anthropic(&model),
+            messages: anthropic_messages,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            stream: Some(true),
+            tools: anthropic_tools,
+            system: system_message,
+        };
+
+        let response = self
+            .client
+            .post(ANTHROPIC_API_URL)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e: ReqwestError| e.to_string())?;
+
+        let request_id = response
+            .headers()
+            .get("request-id")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Anthropic API error ({}): {}", status, error_text));
+        }
+
+        let stream = response.bytes_stream().eventsource().map(|event| {
+            event
+                .map_err(|err| {
+                    eprintln!("stream: failed to read response: {:?}", err);
+                    ApiStreamError::Unknown("Failed to read response".to_string())
+                })
+                .and_then(|event| {
+                    Self::convert_anthropic_stream_event_to_openai(&event.data, &event.event)
+                })
+        });
+
+        Ok((stream, request_id))
+    }
+
+    fn convert_anthropic_stream_event_to_openai(
+        data: &str,
+        event_type: &str,
+    ) -> Result<ChatCompletionStreamResponse, ApiStreamError> {
+        match event_type {
+            "error" => {
+                return Err(ApiStreamError::Unknown(format!("Anthropic error: {}", data)));
+            }
+            "message_start" | "ping" => {
+                // Skip these events, return a minimal delta
+                return Ok(ChatCompletionStreamResponse {
+                    id: "temp".to_string(),
+                    object: "chat.completion.chunk".to_string(),
+                    created: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    model: "smart".to_string(),
+                    choices: vec![],
+                    usage: None,
+                });
+            }
+            "content_block_delta" => {
+                let event: serde_json::Value = serde_json::from_str(data).map_err(|_| {
+                    ApiStreamError::Unknown("Failed to parse content_block_delta".to_string())
+                })?;
+
+                let delta = event.get("delta").ok_or_else(|| {
+                    ApiStreamError::Unknown("No delta in content_block_delta".to_string())
+                })?;
+
+                let content = delta.get("text").and_then(|t| t.as_str()).map(String::from);
+
+                return Ok(ChatCompletionStreamResponse {
+                    id: "stream".to_string(),
+                    object: "chat.completion.chunk".to_string(),
+                    created: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    model: "smart".to_string(),
+                    choices: vec![ChatCompletionStreamChoice {
+                        index: 0,
+                        delta: ChatMessageDelta {
+                            role: Some(Role::Assistant),
+                            content,
+                            tool_calls: None,
+                        },
+                        finish_reason: None,
+                    }],
+                    usage: None,
+                });
+            }
+            "message_delta" => {
+                let event: serde_json::Value = serde_json::from_str(data).map_err(|_| {
+                    ApiStreamError::Unknown("Failed to parse message_delta".to_string())
+                })?;
+
+                let stop_reason = event
+                    .get("delta")
+                    .and_then(|d| d.get("stop_reason"))
+                    .and_then(|s| s.as_str());
+
+                let finish_reason = match stop_reason {
+                    Some("end_turn") => Some(FinishReason::Stop),
+                    Some("max_tokens") => Some(FinishReason::Length),
+                    Some("tool_use") => Some(FinishReason::ToolCalls),
+                    _ => None,
+                };
+
+                return Ok(ChatCompletionStreamResponse {
+                    id: "stream".to_string(),
+                    object: "chat.completion.chunk".to_string(),
+                    created: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    model: "smart".to_string(),
+                    choices: vec![ChatCompletionStreamChoice {
+                        index: 0,
+                        delta: ChatMessageDelta {
+                            role: None,
+                            content: None,
+                            tool_calls: None,
+                        },
+                        finish_reason,
+                    }],
+                    usage: event.get("usage").and_then(|u| {
+                        Some(Usage {
+                            prompt_tokens: u.get("input_tokens")?.as_u64()? as u32,
+                            completion_tokens: u.get("output_tokens")?.as_u64()? as u32,
+                            total_tokens: (u.get("input_tokens")?.as_u64()? as u32)
+                                + (u.get("output_tokens")?.as_u64()? as u32),
+                            prompt_tokens_details: None,
+                        })
+                    }),
+                });
+            }
+            _ => {
+                // Skip unknown events
+                Ok(ChatCompletionStreamResponse {
+                    id: "stream".to_string(),
+                    object: "chat.completion.chunk".to_string(),
+                    created: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    model: "smart".to_string(),
+                    choices: vec![],
+                    usage: None,
+                })
+            }
+        }
+    }
+}

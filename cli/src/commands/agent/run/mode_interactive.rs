@@ -76,6 +76,7 @@ pub async fn run_interactive(
 
         // Clone config values for this iteration
         let api_key = ctx.api_key.clone();
+        let anthropic_api_key = ctx.anthropic_api_key.clone();
         let api_endpoint = ctx.api_endpoint.clone();
         let config_path = ctx.config_path.clone();
         let mcp_server_host = ctx.mcp_server_host.clone();
@@ -121,6 +122,8 @@ pub async fn run_interactive(
                     api: ClientConfig {
                         api_key: ctx_clone.api_key.clone(),
                         api_endpoint: ctx_clone.api_endpoint.clone(),
+                        anthropic_api_key: ctx_clone.anthropic_api_key.clone(),
+                        provider: None,
                     },
                     redact_secrets,
                     privacy_mode,
@@ -186,6 +189,7 @@ pub async fn run_interactive(
 
         // Spawn client task
         let api_key_for_client = api_key.clone();
+        let anthropic_api_key_for_client = anthropic_api_key.clone();
         let api_endpoint_for_client = api_endpoint.clone();
         let shutdown_tx_for_client = shutdown_tx.clone();
         let client_handle: tokio::task::JoinHandle<ClientTaskResult> = tokio::spawn(async move {
@@ -193,6 +197,8 @@ pub async fn run_interactive(
             let client = Client::new(&ClientConfig {
                 api_key: api_key_for_client.clone(),
                 api_endpoint: api_endpoint_for_client.clone(),
+                anthropic_api_key: anthropic_api_key_for_client.clone(),
+                provider: None,
             })
             .map_err(|e| e.to_string())?;
 
@@ -930,6 +936,8 @@ pub async fn run_interactive(
             let client = Client::new(&ClientConfig {
                 api_key: new_config.api_key.clone(),
                 api_endpoint: new_config.api_endpoint.clone(),
+                anthropic_api_key: new_config.anthropic_api_key.clone(),
+                provider: None,
             })
             .map_err(|e| e.to_string())?;
 
@@ -956,6 +964,8 @@ pub async fn run_interactive(
         let client = Client::new(&ClientConfig {
             api_key: ctx.api_key.clone(),
             api_endpoint: ctx.api_endpoint.clone(),
+            anthropic_api_key: ctx.anthropic_api_key.clone(),
+            provider: None,
         })
         .map_err(|e| e.to_string())?;
 

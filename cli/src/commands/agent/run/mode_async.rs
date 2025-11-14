@@ -75,6 +75,8 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
                 api: ClientConfig {
                     api_key: ctx_clone.api_key.clone(),
                     api_endpoint: ctx_clone.api_endpoint.clone(),
+                    anthropic_api_key: ctx_clone.anthropic_api_key.clone(),
+                    provider: None,
                 },
                 redact_secrets: config.redact_secrets,
                 privacy_mode: config.privacy_mode,
@@ -104,6 +106,8 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
     let client = Client::new(&ClientConfig {
         api_key: ctx.api_key.clone(),
         api_endpoint: ctx.api_endpoint.clone(),
+        anthropic_api_key: ctx.anthropic_api_key.clone(),
+        provider: None,
     })
     .map_err(|e| e.to_string())?;
 

@@ -32,6 +32,10 @@ pub struct WardenConfig {
 pub struct ProfileConfig {
     pub api_endpoint: Option<String>,
     pub api_key: Option<String>,
+    /// Anthropic API key for Claude Code integration
+    pub anthropic_api_key: Option<String>,
+    /// LLM Provider: "stakpak" or "anthropic"
+    pub provider: Option<String>,
     /// Allowed tools (empty = all tools allowed)
     pub allowed_tools: Option<Vec<String>>,
     /// Tools that auto-approve without asking
@@ -58,6 +62,8 @@ pub struct ConfigFile {
 pub struct AppConfig {
     pub api_endpoint: String,
     pub api_key: Option<String>,
+    pub anthropic_api_key: Option<String>,
+    pub provider: Option<String>,
     pub mcp_server_host: Option<String>,
     pub machine_name: Option<String>,
     pub auto_append_gitignore: Option<bool>,
@@ -93,9 +99,19 @@ pub struct ProfileInfo {
 
 impl From<AppConfig> for ClientConfig {
     fn from(config: AppConfig) -> Self {
+        use stakpak_api::LLMProvider;
+
+        let provider = config.provider.as_ref().and_then(|p| match p.as_str() {
+            "anthropic" => Some(LLMProvider::Anthropic),
+            "stakpak" => Some(LLMProvider::Stakpak),
+            _ => None,
+        });
+
         ClientConfig {
             api_key: config.api_key.clone(),
             api_endpoint: config.api_endpoint.clone(),
+            anthropic_api_key: config.anthropic_api_key.clone(),
+            provider,
         }
     }
 }
@@ -266,6 +282,14 @@ impl AppConfig {
             .api_key
             .or_else(|| all_profile.and_then(|all| all.api_key.clone()));
 
+        let anthropic_api_key = profile
+            .anthropic_api_key
+            .or_else(|| all_profile.and_then(|all| all.anthropic_api_key.clone()));
+
+        let provider = profile
+            .provider
+            .or_else(|| all_profile.and_then(|all| all.provider.clone()));
+
         // Apply inheritance for tool settings
         let allowed_tools = profile
             .allowed_tools
@@ -285,11 +309,14 @@ impl AppConfig {
 
         // Override with environment variables if present
         let api_key = std::env::var("STAKPAK_API_KEY").ok().or(api_key);
+        let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY").ok().or(anthropic_api_key);
         let api_endpoint = std::env::var("STAKPAK_API_ENDPOINT").unwrap_or(api_endpoint);
 
         let app_config = AppConfig {
             api_endpoint,
             api_key,
+            anthropic_api_key,
+            provider,
             mcp_server_host: None, // This can be added to profiles later if needed
             machine_name: config_file.settings.machine_name,
             auto_append_gitignore: config_file.settings.auto_append_gitignore,
@@ -385,6 +412,8 @@ impl AppConfig {
             ProfileConfig {
                 api_endpoint: Some(self.api_endpoint.clone()),
                 api_key: self.api_key.clone(),
+                anthropic_api_key: self.anthropic_api_key.clone(),
+                provider: self.provider.clone(),
                 allowed_tools: self.allowed_tools.clone(),
                 auto_approve: self.auto_approve.clone(),
                 rulebooks: self.rulebooks.clone(),
