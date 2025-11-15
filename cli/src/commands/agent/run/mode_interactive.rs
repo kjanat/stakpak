@@ -811,6 +811,38 @@ pub async fn run_interactive(
                         )
                         .await?;
 
+                        // Load available rulebooks for the new provider and send to TUI
+                        // If provider has no rulebooks, fall back to Stakpak
+                        let rulebooks_result = new_client.list_rulebooks().await;
+                        let all_rulebooks = match rulebooks_result {
+                            Ok(rulebooks) if !rulebooks.is_empty() => Some(rulebooks),
+                            _ => {
+                                // Fallback: if this provider has no rulebooks and we have Stakpak credentials,
+                                // try fetching from Stakpak
+                                if updated_config.api_key.is_some() && new_provider != "stakpak" {
+                                    // Create a temporary Stakpak client config
+                                    let mut stakpak_config = updated_config.clone();
+                                    stakpak_config.provider = Some("stakpak".to_string());
+
+                                    if let Ok(stakpak_client) = Client::new(&stakpak_config.into())
+                                    {
+                                        stakpak_client.list_rulebooks().await.ok()
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            }
+                        };
+
+                        if let Some(rulebooks) = all_rulebooks {
+                            all_available_rulebooks = Some(rulebooks.clone());
+                            let _ =
+                                send_input_event(&input_tx, InputEvent::RulebooksLoaded(rulebooks))
+                                    .await;
+                        }
+
                         // Replace the long-lived client and context with the new ones
                         client = new_client;
                         ctx_for_client = updated_config;
