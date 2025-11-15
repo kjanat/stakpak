@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use stakpak_shared::models::integrations::openai::{
     AgentModel, ChatCompletionChoice, ChatCompletionResponse, ChatCompletionStreamChoice,
     ChatCompletionStreamResponse, ChatMessage, ChatMessageDelta, FinishReason, FunctionCall,
-    MessageContent, PromptTokensDetails, Role, Tool, ToolCall, Usage,
+    FunctionCallDelta, MessageContent, PromptTokensDetails, Role, Tool, ToolCall,
+    ToolCallDelta, Usage,
 };
 use stakpak_shared::tls_client::TlsClientConfig;
 use stakpak_shared::tls_client::create_tls_client;
@@ -624,6 +625,21 @@ impl AnthropicClient {
         data: &str,
         event_type: &str,
     ) -> Result<ChatCompletionStreamResponse, ApiStreamError> {
+        // Parse the event data to extract model if available
+        let event: serde_json::Value = serde_json::from_str(data).unwrap_or(serde_json::Value::Null);
+
+        // Extract model from message_start event or default to "smart"
+        let model = if event_type == "message_start" {
+            event
+                .get("message")
+                .and_then(|m| m.get("model"))
+                .and_then(|m| m.as_str())
+                .unwrap_or("smart")
+                .to_string()
+        } else {
+            "smart".to_string()
+        };
+
         match event_type {
             "error" => Err(ApiStreamError::Unknown(format!(
                 "Anthropic error: {data}"
@@ -637,50 +653,179 @@ impl AnthropicClient {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs(),
-                    model: "smart".to_string(),
+                    model,
                     choices: vec![],
                     usage: None,
                 })
             }
-            "content_block_delta" => {
-                let event: serde_json::Value = serde_json::from_str(data).map_err(|_| {
-                    ApiStreamError::Unknown("Failed to parse content_block_delta".to_string())
+            "content_block_start" => {
+                // Handle tool_use block starts
+                let content_block = event.get("content_block").ok_or_else(|| {
+                    ApiStreamError::Unknown("No content_block in content_block_start".to_string())
                 })?;
 
+                let block_type = content_block
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+
+                if block_type == "tool_use" {
+                    // Extract tool call information
+                    let id = content_block
+                        .get("id")
+                        .and_then(|i| i.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let name = content_block
+                        .get("name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    let index = event.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+
+                    Ok(ChatCompletionStreamResponse {
+                        id: "stream".to_string(),
+                        object: "chat.completion.chunk".to_string(),
+                        created: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        model,
+                        choices: vec![ChatCompletionStreamChoice {
+                            index: 0,
+                            delta: ChatMessageDelta {
+                                role: Some(Role::Assistant),
+                                content: None,
+                                tool_calls: Some(vec![ToolCallDelta {
+                                    index,
+                                    id: Some(id),
+                                    r#type: Some("function".to_string()),
+                                    function: Some(FunctionCallDelta {
+                                        name: Some(name),
+                                        arguments: None,
+                                    }),
+                                }]),
+                            },
+                            finish_reason: None,
+                        }],
+                        usage: None,
+                    })
+                } else {
+                    // Text block start - return minimal delta
+                    Ok(ChatCompletionStreamResponse {
+                        id: "stream".to_string(),
+                        object: "chat.completion.chunk".to_string(),
+                        created: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        model,
+                        choices: vec![ChatCompletionStreamChoice {
+                            index: 0,
+                            delta: ChatMessageDelta {
+                                role: Some(Role::Assistant),
+                                content: None,
+                                tool_calls: None,
+                            },
+                            finish_reason: None,
+                        }],
+                        usage: None,
+                    })
+                }
+            }
+            "content_block_delta" => {
                 let delta = event.get("delta").ok_or_else(|| {
                     ApiStreamError::Unknown("No delta in content_block_delta".to_string())
                 })?;
 
-                let content = delta.get("text").and_then(|t| t.as_str()).map(String::from);
+                let delta_type = delta
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
 
-                Ok(ChatCompletionStreamResponse {
-                    id: "stream".to_string(),
-                    object: "chat.completion.chunk".to_string(),
-                    created: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    model: "smart".to_string(),
-                    choices: vec![ChatCompletionStreamChoice {
-                        index: 0,
-                        delta: ChatMessageDelta {
-                            role: Some(Role::Assistant),
-                            content,
-                            tool_calls: None,
-                        },
-                        finish_reason: None,
-                    }],
-                    usage: None,
-                })
+                if delta_type == "text_delta" {
+                    // Text content delta
+                    let content = delta.get("text").and_then(|t| t.as_str()).map(String::from);
+
+                    Ok(ChatCompletionStreamResponse {
+                        id: "stream".to_string(),
+                        object: "chat.completion.chunk".to_string(),
+                        created: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        model,
+                        choices: vec![ChatCompletionStreamChoice {
+                            index: 0,
+                            delta: ChatMessageDelta {
+                                role: None,
+                                content,
+                                tool_calls: None,
+                            },
+                            finish_reason: None,
+                        }],
+                        usage: None,
+                    })
+                } else if delta_type == "input_json_delta" {
+                    // Tool input delta
+                    let partial_json = delta
+                        .get("partial_json")
+                        .and_then(|j| j.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    let index = event.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+
+                    Ok(ChatCompletionStreamResponse {
+                        id: "stream".to_string(),
+                        object: "chat.completion.chunk".to_string(),
+                        created: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        model,
+                        choices: vec![ChatCompletionStreamChoice {
+                            index: 0,
+                            delta: ChatMessageDelta {
+                                role: None,
+                                content: None,
+                                tool_calls: Some(vec![ToolCallDelta {
+                                    index,
+                                    id: None,
+                                    r#type: None,
+                                    function: Some(FunctionCallDelta {
+                                        name: None,
+                                        arguments: Some(partial_json),
+                                    }),
+                                }]),
+                            },
+                            finish_reason: None,
+                        }],
+                        usage: None,
+                    })
+                } else {
+                    // Unknown delta type, return empty
+                    Ok(ChatCompletionStreamResponse {
+                        id: "stream".to_string(),
+                        object: "chat.completion.chunk".to_string(),
+                        created: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        model,
+                        choices: vec![],
+                        usage: None,
+                    })
+                }
             }
             "message_delta" => {
-                let event: serde_json::Value = serde_json::from_str(data).map_err(|_| {
-                    ApiStreamError::Unknown("Failed to parse message_delta".to_string())
+                let delta_obj = event.get("delta").ok_or_else(|| {
+                    ApiStreamError::Unknown("No delta in message_delta".to_string())
                 })?;
 
-                let stop_reason = event
-                    .get("delta")
-                    .and_then(|d| d.get("stop_reason"))
+                let stop_reason = delta_obj
+                    .get("stop_reason")
                     .and_then(|s| s.as_str());
 
                 let finish_reason = match stop_reason {
@@ -697,7 +842,7 @@ impl AnthropicClient {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs(),
-                    model: "smart".to_string(),
+                    model,
                     choices: vec![ChatCompletionStreamChoice {
                         index: 0,
                         delta: ChatMessageDelta {
@@ -728,7 +873,7 @@ impl AnthropicClient {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs(),
-                    model: "smart".to_string(),
+                    model,
                     choices: vec![],
                     usage: None,
                 })

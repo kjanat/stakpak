@@ -17,7 +17,7 @@ use crate::utils::local_context::LocalContext;
 use crate::utils::network;
 use reqwest::header::HeaderMap;
 use stakpak_api::models::ApiStreamError;
-use stakpak_api::{Client, ClientConfig, ListRuleBook};
+use stakpak_api::{Client, ListRuleBook};
 use stakpak_mcp_client::ClientManager;
 use stakpak_mcp_server::{EnabledToolsConfig, MCPServerConfig, ToolMode, start_server};
 use stakpak_shared::cert_utils::CertificateChain;
@@ -75,9 +75,6 @@ pub async fn run_interactive(
         };
 
         // Clone config values for this iteration
-        let api_key = ctx.api_key.clone();
-        let anthropic_api_key = ctx.anthropic_api_key.clone();
-        let api_endpoint = ctx.api_endpoint.clone();
         let config_path = ctx.config_path.clone();
         let mcp_server_host = ctx.mcp_server_host.clone();
         let local_context = config.local_context.clone();
@@ -119,13 +116,7 @@ pub async fn run_interactive(
         let mcp_handle = tokio::spawn(async move {
             let _ = start_server(
                 MCPServerConfig {
-                    api: ClientConfig {
-                        api_key: ctx_clone.api_key.clone(),
-                        api_endpoint: ctx_clone.api_endpoint.clone(),
-                        anthropic_api_key: ctx_clone.anthropic_api_key.clone(),
-                        anthropic_oauth: None,
-                        provider: None,
-                    },
+                    api: ctx_clone.clone().into(),
                     redact_secrets,
                     privacy_mode,
                     enabled_tools,
@@ -189,26 +180,18 @@ pub async fn run_interactive(
         });
 
         // Spawn client task
-        let api_key_for_client = api_key.clone();
-        let anthropic_api_key_for_client = anthropic_api_key.clone();
-        let api_endpoint_for_client = api_endpoint.clone();
+        let ctx_for_client = ctx.clone();
         let shutdown_tx_for_client = shutdown_tx.clone();
         let client_handle: tokio::task::JoinHandle<ClientTaskResult> = tokio::spawn(async move {
             let mut current_session_id: Option<Uuid> = None;
-            let client = Client::new(&ClientConfig {
-                api_key: api_key_for_client.clone(),
-                api_endpoint: api_endpoint_for_client.clone(),
-                anthropic_api_key: anthropic_api_key_for_client.clone(),
-                anthropic_oauth: None,
-                provider: None,
-            })
-            .map_err(|e| e.to_string())?;
+            let client = Client::new(&ctx_for_client.clone().into())
+                .map_err(|e| e.to_string())?;
 
             let data = client.get_my_account().await?;
             send_input_event(&input_tx, InputEvent::GetStatus(data.to_text())).await?;
             // Load available profiles and send to TUI
-            let profiles_config_path = ctx.config_path.clone();
-            let current_profile_name = ctx.profile_name.clone();
+            let profiles_config_path = ctx_for_client.config_path.clone();
+            let current_profile_name = ctx_for_client.profile_name.clone();
             if let Ok(profiles) = AppConfig::list_available_profiles(Some(&profiles_config_path)) {
                 let _ = send_input_event(
                     &input_tx,
@@ -649,7 +632,7 @@ pub async fn run_interactive(
                         .await?;
 
                         // Validate new profile with API key inheritance
-                        let default_api_key = api_key_for_client.clone();
+                        let default_api_key = ctx_for_client.api_key.clone();
                         let new_config = match super::profile_switch::validate_profile_switch(
                             &new_profile,
                             Some(&config_path),
@@ -935,14 +918,8 @@ pub async fn run_interactive(
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
             // Fetch and filter rulebooks for the new profile
-            let client = Client::new(&ClientConfig {
-                api_key: new_config.api_key.clone(),
-                api_endpoint: new_config.api_endpoint.clone(),
-                anthropic_api_key: new_config.anthropic_api_key.clone(),
-                anthropic_oauth: None,
-                provider: None,
-            })
-            .map_err(|e| e.to_string())?;
+            let client = Client::new(&new_config.clone().into())
+                .map_err(|e| e.to_string())?;
 
             let new_rulebooks = client.list_rulebooks().await.ok().map(|rulebooks| {
                 if let Some(rulebook_config) = &new_config.rulebooks {
@@ -964,14 +941,8 @@ pub async fn run_interactive(
 
         // Normal exit - no profile switch requested
         // Display final stats and session info
-        let client = Client::new(&ClientConfig {
-            api_key: ctx.api_key.clone(),
-            api_endpoint: ctx.api_endpoint.clone(),
-            anthropic_api_key: ctx.anthropic_api_key.clone(),
-            anthropic_oauth: None,
-            provider: None,
-        })
-        .map_err(|e| e.to_string())?;
+        let client = Client::new(&ctx.clone().into())
+            .map_err(|e| e.to_string())?;
 
         // Display session stats
         if let Some(session_id) = final_session_id {
