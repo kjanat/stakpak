@@ -43,7 +43,11 @@ pub struct AnthropicClient {
 
 impl Clone for AnthropicClient {
     fn clone(&self) -> Self {
-        let auth = self.auth.lock().unwrap().clone();
+        let auth = self
+            .auth
+            .lock()
+            .expect("Mutex poisoned during clone")
+            .clone();
         Self {
             client: self.client.clone(),
             auth: Mutex::new(auth),
