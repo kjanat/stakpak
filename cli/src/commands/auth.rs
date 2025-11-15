@@ -1,8 +1,8 @@
-use crate::config::{AppConfig, AnthropicOAuth};
+use crate::config::{AnthropicOAuth, AppConfig};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use clap::Subcommand;
-use sha2::{Digest, Sha256};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::Rng;
+use sha2::{Digest, Sha256};
 
 const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const OAUTH_AUTHORIZE_URL: &str = "https://claude.ai/oauth/authorize";
@@ -100,11 +100,17 @@ async fn exchange_code_for_tokens(
     Ok((refresh_token, access_token, expires))
 }
 
-pub async fn handle_auth_command(command: AuthCommands, config: &mut AppConfig) -> Result<(), String> {
+pub async fn handle_auth_command(
+    command: AuthCommands,
+    config: &mut AppConfig,
+) -> Result<(), String> {
     match command {
         AuthCommands::Login { provider } => {
             if provider != "anthropic" {
-                return Err(format!("Unsupported provider: {}. Currently only 'anthropic' is supported.", provider));
+                return Err(format!(
+                    "Unsupported provider: {}. Currently only 'anthropic' is supported.",
+                    provider
+                ));
             }
 
             println!("\n🔐 Anthropic/Claude Code OAuth Login\n");
@@ -133,11 +139,15 @@ pub async fn handle_auth_command(command: AuthCommands, config: &mut AppConfig) 
                 eprintln!("Failed to open browser: {}", e);
             }
 
-            println!("After authorizing, you will be redirected to a page showing an authorization code.");
+            println!(
+                "After authorizing, you will be redirected to a page showing an authorization code."
+            );
             println!("The code will be in the format: <code>#<state>");
             print!("\nPaste the authorization code here: ");
             use std::io::{self, Write};
-            io::stdout().flush().map_err(|e| format!("Failed to flush stdout: {}", e))?;
+            io::stdout()
+                .flush()
+                .map_err(|e| format!("Failed to flush stdout: {}", e))?;
 
             let mut input = String::new();
             io::stdin()
@@ -149,7 +159,9 @@ pub async fn handle_auth_command(command: AuthCommands, config: &mut AppConfig) 
             // Split code and state
             let parts: Vec<&str> = full_code.split('#').collect();
             if parts.len() != 2 {
-                return Err("Invalid authorization code format. Expected: <code>#<state>".to_string());
+                return Err(
+                    "Invalid authorization code format. Expected: <code>#<state>".to_string(),
+                );
             }
 
             let code = parts[0];
@@ -180,7 +192,10 @@ pub async fn handle_auth_command(command: AuthCommands, config: &mut AppConfig) 
 
         AuthCommands::Logout { provider } => {
             if provider != "anthropic" {
-                return Err(format!("Unsupported provider: {}. Currently only 'anthropic' is supported.", provider));
+                return Err(format!(
+                    "Unsupported provider: {}. Currently only 'anthropic' is supported.",
+                    provider
+                ));
             }
 
             if config.anthropic_oauth.is_none() {

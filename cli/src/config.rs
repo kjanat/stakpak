@@ -118,13 +118,15 @@ impl From<AppConfig> for ClientConfig {
             _ => None,
         });
 
-        let anthropic_oauth = config.anthropic_oauth.as_ref().map(|oauth| {
-            stakpak_api::AnthropicOAuthTokens {
-                refresh_token: oauth.refresh_token.clone(),
-                access_token: oauth.access_token.clone(),
-                expires: oauth.expires,
-            }
-        });
+        let anthropic_oauth =
+            config
+                .anthropic_oauth
+                .as_ref()
+                .map(|oauth| stakpak_api::AnthropicOAuthTokens {
+                    refresh_token: oauth.refresh_token.clone(),
+                    access_token: oauth.access_token.clone(),
+                    expires: oauth.expires,
+                });
 
         ClientConfig {
             api_key: config.api_key.clone(),
@@ -333,7 +335,9 @@ impl AppConfig {
 
         // Override with environment variables if present
         let api_key = std::env::var("STAKPAK_API_KEY").ok().or(api_key);
-        let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY").ok().or(anthropic_api_key);
+        let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY")
+            .ok()
+            .or(anthropic_api_key);
         let api_endpoint = std::env::var("STAKPAK_API_ENDPOINT").unwrap_or(api_endpoint);
 
         let app_config = AppConfig {

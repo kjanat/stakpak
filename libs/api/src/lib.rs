@@ -7,11 +7,10 @@ use rmcp::model::JsonRpcResponse;
 use serde::{Deserialize, Serialize};
 use stakpak_shared::tls_client::TlsClientConfig;
 use stakpak_shared::tls_client::create_tls_client;
-pub mod models;
 pub mod anthropic;
+pub mod models;
 use futures_util::Stream;
 use futures_util::StreamExt;
-use std::pin::Pin;
 use models::*;
 use serde_json::Value;
 use serde_json::json;
@@ -19,6 +18,7 @@ use stakpak_shared::models::integrations::openai::{
     AgentModel, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionStreamResponse,
     ChatMessage, Tool,
 };
+use std::pin::Pin;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -71,8 +71,9 @@ struct ApiErrorDetail {
 
 impl Client {
     fn get_stakpak_client(&self) -> Result<&StakpakClient, String> {
-        self.stakpak_client.as_ref()
-            .ok_or_else(|| "Stakpak client not configured. This operation requires a Stakpak API key.".to_string())
+        self.stakpak_client.as_ref().ok_or_else(|| {
+            "Stakpak client not configured. This operation requires a Stakpak API key.".to_string()
+        })
     }
 
     async fn handle_response_error(&self, response: Response) -> Result<Response, String> {
@@ -119,8 +120,11 @@ impl Client {
                 );
                 headers.insert(
                     header::USER_AGENT,
-                    header::HeaderValue::from_str(&format!("Stakpak/{}", env!("CARGO_PKG_VERSION")))
-                        .map_err(|_| "Invalid user agent format".to_string())?,
+                    header::HeaderValue::from_str(&format!(
+                        "Stakpak/{}",
+                        env!("CARGO_PKG_VERSION")
+                    ))
+                    .map_err(|_| "Invalid user agent format".to_string())?,
                 );
 
                 let client = create_tls_client(
@@ -156,7 +160,9 @@ impl Client {
                 }
             } else {
                 anthropic::AnthropicClientConfig {
-                    auth: anthropic::AnthropicAuth::ApiKey(config.anthropic_api_key.clone().unwrap()),
+                    auth: anthropic::AnthropicAuth::ApiKey(
+                        config.anthropic_api_key.clone().unwrap(),
+                    ),
                 }
             };
 
@@ -177,8 +183,9 @@ impl Client {
     }
 
     pub async fn get_my_account(&self) -> Result<GetMyAccountResponse, String> {
-        let stakpak_client = self.stakpak_client.as_ref()
-            .ok_or_else(|| "Stakpak client not configured. This operation requires a Stakpak API key.".to_string())?;
+        let stakpak_client = self.stakpak_client.as_ref().ok_or_else(|| {
+            "Stakpak client not configured. This operation requires a Stakpak API key.".to_string()
+        })?;
 
         let url = format!("{}/account", stakpak_client.base_url);
 
@@ -203,8 +210,9 @@ impl Client {
     }
 
     pub async fn list_rulebooks(&self) -> Result<Vec<ListRuleBook>, String> {
-        let stakpak_client = self.stakpak_client.as_ref()
-            .ok_or_else(|| "Stakpak client not configured. This operation requires a Stakpak API key.".to_string())?;
+        let stakpak_client = self.stakpak_client.as_ref().ok_or_else(|| {
+            "Stakpak client not configured. This operation requires a Stakpak API key.".to_string()
+        })?;
 
         let url = format!("{}/rules", stakpak_client.base_url);
 
@@ -386,7 +394,10 @@ impl Client {
         session_id: Uuid,
     ) -> Result<AgentSessionStats, String> {
         let stakpak_client = self.get_stakpak_client()?;
-        let url = format!("{}/agents/sessions/{}/stats", stakpak_client.base_url, session_id);
+        let url = format!(
+            "{}/agents/sessions/{}/stats",
+            stakpak_client.base_url, session_id
+        );
 
         let response = stakpak_client
             .client
@@ -475,7 +486,10 @@ impl Client {
         checkpoint_id: Uuid,
     ) -> Result<RunAgentOutput, String> {
         let stakpak_client = self.get_stakpak_client()?;
-        let url = format!("{}/agents/checkpoints/{}", stakpak_client.base_url, checkpoint_id);
+        let url = format!(
+            "{}/agents/checkpoints/{}",
+            stakpak_client.base_url, checkpoint_id
+        );
 
         let response = stakpak_client
             .client
@@ -535,15 +549,24 @@ impl Client {
     ) -> Result<ChatCompletionResponse, String> {
         match self.provider {
             LLMProvider::Anthropic => {
-                let anthropic_client = self.anthropic_client.as_ref()
+                let anthropic_client = self
+                    .anthropic_client
+                    .as_ref()
                     .ok_or_else(|| "Anthropic client not configured".to_string())?;
-                anthropic_client.chat_completion(model, messages, tools).await
+                anthropic_client
+                    .chat_completion(model, messages, tools)
+                    .await
             }
             LLMProvider::Stakpak => {
-                let stakpak_client = self.stakpak_client.as_ref()
+                let stakpak_client = self
+                    .stakpak_client
+                    .as_ref()
                     .ok_or_else(|| "Stakpak client not configured".to_string())?;
 
-                let url = format!("{}/agents/openai/v1/chat/completions", stakpak_client.base_url);
+                let url = format!(
+                    "{}/agents/openai/v1/chat/completions",
+                    stakpak_client.base_url
+                );
 
                 let input = ChatCompletionRequest::new(model, messages, tools, None);
 
@@ -579,23 +602,38 @@ impl Client {
         headers: Option<HeaderMap>,
     ) -> Result<
         (
-            Pin<Box<dyn Stream<Item = Result<ChatCompletionStreamResponse, ApiStreamError>> + Send + '_>>,
+            Pin<
+                Box<
+                    dyn Stream<Item = Result<ChatCompletionStreamResponse, ApiStreamError>>
+                        + Send
+                        + '_,
+                >,
+            >,
             Option<String>,
         ),
         String,
     > {
         match self.provider {
             LLMProvider::Anthropic => {
-                let anthropic_client = self.anthropic_client.as_ref()
+                let anthropic_client = self
+                    .anthropic_client
+                    .as_ref()
                     .ok_or_else(|| "Anthropic client not configured".to_string())?;
-                let (stream, request_id) = anthropic_client.chat_completion_stream(model, messages, tools, headers).await?;
+                let (stream, request_id) = anthropic_client
+                    .chat_completion_stream(model, messages, tools, headers)
+                    .await?;
                 Ok((Box::pin(stream), request_id))
             }
             LLMProvider::Stakpak => {
-                let stakpak_client = self.stakpak_client.as_ref()
+                let stakpak_client = self
+                    .stakpak_client
+                    .as_ref()
                     .ok_or_else(|| "Stakpak client not configured".to_string())?;
 
-                let url = format!("{}/agents/openai/v1/chat/completions", stakpak_client.base_url);
+                let url = format!(
+                    "{}/agents/openai/v1/chat/completions",
+                    stakpak_client.base_url
+                );
 
                 let input = ChatCompletionRequest::new(model, messages, tools, Some(true));
 
@@ -624,13 +662,12 @@ impl Client {
                         })
                         .and_then(|event| match event.event.as_str() {
                             "error" => Err(ApiStreamError::from(event.data)),
-                            _ => serde_json::from_str::<ChatCompletionStreamResponse>(&event.data).map_err(
-                                |_| {
+                            _ => serde_json::from_str::<ChatCompletionStreamResponse>(&event.data)
+                                .map_err(|_| {
                                     ApiStreamError::Unknown(
                                         "Failed to parse JSON from Anthropic response".to_string(),
                                     )
-                                },
-                            ),
+                                }),
                         })
                 });
 
@@ -641,7 +678,10 @@ impl Client {
 
     pub async fn cancel_stream(&self, request_id: String) -> Result<(), String> {
         let stakpak_client = self.get_stakpak_client()?;
-        let url = format!("{}/agents/requests/{}/cancel", stakpak_client.base_url, request_id);
+        let url = format!(
+            "{}/agents/requests/{}/cancel",
+            stakpak_client.base_url, request_id
+        );
         stakpak_client
             .client
             .post(&url)

@@ -1,3 +1,4 @@
+use super::ApiStreamError;
 use eventsource_stream::Eventsource;
 use futures_util::Stream;
 use futures_util::StreamExt;
@@ -5,14 +6,12 @@ use reqwest::header::HeaderMap;
 use reqwest::{Client as ReqwestClient, Error as ReqwestError};
 use serde::{Deserialize, Serialize};
 use stakpak_shared::models::integrations::openai::{
-    AgentModel, ChatCompletionResponse, ChatCompletionStreamResponse, ChatMessage, MessageContent,
-    Role, Tool, ToolCall, ChatMessageDelta, ChatCompletionChoice,
-    ChatCompletionStreamChoice, Usage, FinishReason, FunctionCall,
-    PromptTokensDetails,
+    AgentModel, ChatCompletionChoice, ChatCompletionResponse, ChatCompletionStreamChoice,
+    ChatCompletionStreamResponse, ChatMessage, ChatMessageDelta, FinishReason, FunctionCall,
+    MessageContent, PromptTokensDetails, Role, Tool, ToolCall, Usage,
 };
 use stakpak_shared::tls_client::TlsClientConfig;
 use stakpak_shared::tls_client::create_tls_client;
-use super::ApiStreamError;
 use std::sync::Mutex;
 
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -115,7 +114,9 @@ struct AnthropicTool {
 struct AnthropicResponse {
     id: String,
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     response_type: String,
+    #[allow(dead_code)]
     role: String,
     content: Vec<AnthropicContentBlock>,
     model: String,
@@ -129,25 +130,21 @@ struct AnthropicUsage {
     output_tokens: u32,
 }
 
-#[derive(Deserialize, Debug)]
-struct AnthropicStreamEvent {
-    #[serde(rename = "type")]
-    event_type: String,
-    #[serde(flatten)]
-    data: serde_json::Value,
-}
-
 impl AnthropicClient {
     pub fn new(config: &AnthropicClientConfig) -> Result<Self, String> {
         // Base headers that are always needed
         let mut headers = HeaderMap::new();
         headers.insert(
             "anthropic-version",
-            ANTHROPIC_VERSION.parse().map_err(|e| format!("Invalid version header: {}", e))?,
+            ANTHROPIC_VERSION
+                .parse()
+                .map_err(|e| format!("Invalid version header: {}", e))?,
         );
         headers.insert(
             reqwest::header::CONTENT_TYPE,
-            "application/json".parse().map_err(|e| format!("Invalid content type: {}", e))?,
+            "application/json"
+                .parse()
+                .map_err(|e| format!("Invalid content type: {}", e))?,
         );
         headers.insert(
             reqwest::header::USER_AGENT,
@@ -171,7 +168,10 @@ impl AnthropicClient {
     async fn get_valid_access_token(&self) -> Result<String, String> {
         // First, check if we need to refresh
         let should_refresh = {
-            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let auth = self
+                .auth
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))?;
             match &*auth {
                 AnthropicAuth::ApiKey(_) => false,
                 AnthropicAuth::OAuth(oauth) => {
@@ -191,7 +191,10 @@ impl AnthropicClient {
         }
 
         // Get the token
-        let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let auth = self
+            .auth
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
         match &*auth {
             AnthropicAuth::ApiKey(key) => Ok(key.clone()),
             AnthropicAuth::OAuth(oauth) => Ok(oauth.access_token.clone()),
@@ -200,14 +203,18 @@ impl AnthropicClient {
 
     async fn refresh_token(&self) -> Result<(), String> {
         let refresh_token = {
-            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let auth = self
+                .auth
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))?;
             match &*auth {
                 AnthropicAuth::OAuth(oauth) => oauth.refresh_token.clone(),
                 _ => return Err("Not using OAuth authentication".to_string()),
             }
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post("https://console.anthropic.com/v1/oauth/token")
             .json(&serde_json::json!({
                 "grant_type": "refresh_token",
@@ -222,11 +229,16 @@ impl AnthropicClient {
             return Err(format!("Token refresh returned {}", response.status()));
         }
 
-        let json: serde_json::Value = response.json().await
+        let json: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| format!("Failed to parse refresh response: {}", e))?;
 
         // Update the auth with new tokens
-        let mut auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut auth = self
+            .auth
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
         if let AnthropicAuth::OAuth(oauth_mut) = &mut *auth {
             oauth_mut.access_token = json["access_token"]
                 .as_str()
@@ -297,10 +309,10 @@ impl AnthropicClient {
                             }
                             MessageContent::Array(parts) => {
                                 for part in parts {
-                                    if let Some(text) = part.text {
-                                        if !text.is_empty() {
-                                            blocks.push(AnthropicContentBlock::Text { text });
-                                        }
+                                    if let Some(text) = part.text
+                                        && !text.is_empty()
+                                    {
+                                        blocks.push(AnthropicContentBlock::Text { text });
                                     }
                                 }
                             }
@@ -311,8 +323,9 @@ impl AnthropicClient {
                     // Add tool calls if present
                     if let Some(tool_calls) = msg.tool_calls {
                         for tool_call in tool_calls {
-                            let input: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-                                .unwrap_or(serde_json::json!({}));
+                            let input: serde_json::Value =
+                                serde_json::from_str(&tool_call.function.arguments)
+                                    .unwrap_or(serde_json::json!({}));
                             blocks.push(AnthropicContentBlock::ToolUse {
                                 id: tool_call.id,
                                 name: tool_call.function.name,
@@ -331,9 +344,7 @@ impl AnthropicClient {
                 Role::Tool => {
                     // Tool result message
                     if let Some(tool_call_id) = msg.tool_call_id {
-                        let content_text = msg.content
-                            .map(|c| c.to_string())
-                            .unwrap_or_default();
+                        let content_text = msg.content.map(|c| c.to_string()).unwrap_or_default();
 
                         anthropic_messages.push(AnthropicMessage {
                             role: "user".to_string(),
@@ -342,7 +353,7 @@ impl AnthropicClient {
                                     tool_use_id: tool_call_id,
                                     content: content_text,
                                     is_error: None,
-                                }
+                                },
                             ]),
                         });
                     }
@@ -369,9 +380,7 @@ impl AnthropicClient {
         })
     }
 
-    fn convert_anthropic_response_to_openai(
-        response: AnthropicResponse,
-    ) -> ChatCompletionResponse {
+    fn convert_anthropic_response_to_openai(response: AnthropicResponse) -> ChatCompletionResponse {
         let mut text_content = Vec::new();
         let mut tool_calls = Vec::new();
 
@@ -477,7 +486,10 @@ impl AnthropicClient {
         let mut request_builder = self.client.post(ANTHROPIC_API_URL);
 
         let is_oauth = {
-            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let auth = self
+                .auth
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))?;
             matches!(&*auth, AnthropicAuth::OAuth(_))
         };
 
@@ -512,7 +524,9 @@ impl AnthropicClient {
             .await
             .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
 
-        Ok(Self::convert_anthropic_response_to_openai(anthropic_response))
+        Ok(Self::convert_anthropic_response_to_openai(
+            anthropic_response,
+        ))
     }
 
     pub async fn chat_completion_stream(
@@ -547,7 +561,10 @@ impl AnthropicClient {
         let mut request_builder = self.client.post(ANTHROPIC_API_URL);
 
         let is_oauth = {
-            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let auth = self
+                .auth
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))?;
             matches!(&*auth, AnthropicAuth::OAuth(_))
         };
 
@@ -602,12 +619,13 @@ impl AnthropicClient {
         event_type: &str,
     ) -> Result<ChatCompletionStreamResponse, ApiStreamError> {
         match event_type {
-            "error" => {
-                return Err(ApiStreamError::Unknown(format!("Anthropic error: {}", data)));
-            }
+            "error" => Err(ApiStreamError::Unknown(format!(
+                "Anthropic error: {}",
+                data
+            ))),
             "message_start" | "ping" => {
                 // Skip these events, return a minimal delta
-                return Ok(ChatCompletionStreamResponse {
+                Ok(ChatCompletionStreamResponse {
                     id: "temp".to_string(),
                     object: "chat.completion.chunk".to_string(),
                     created: std::time::SystemTime::now()
@@ -617,7 +635,7 @@ impl AnthropicClient {
                     model: "smart".to_string(),
                     choices: vec![],
                     usage: None,
-                });
+                })
             }
             "content_block_delta" => {
                 let event: serde_json::Value = serde_json::from_str(data).map_err(|_| {
@@ -630,7 +648,7 @@ impl AnthropicClient {
 
                 let content = delta.get("text").and_then(|t| t.as_str()).map(String::from);
 
-                return Ok(ChatCompletionStreamResponse {
+                Ok(ChatCompletionStreamResponse {
                     id: "stream".to_string(),
                     object: "chat.completion.chunk".to_string(),
                     created: std::time::SystemTime::now()
@@ -648,7 +666,7 @@ impl AnthropicClient {
                         finish_reason: None,
                     }],
                     usage: None,
-                });
+                })
             }
             "message_delta" => {
                 let event: serde_json::Value = serde_json::from_str(data).map_err(|_| {
@@ -667,7 +685,7 @@ impl AnthropicClient {
                     _ => None,
                 };
 
-                return Ok(ChatCompletionStreamResponse {
+                Ok(ChatCompletionStreamResponse {
                     id: "stream".to_string(),
                     object: "chat.completion.chunk".to_string(),
                     created: std::time::SystemTime::now()
@@ -693,7 +711,7 @@ impl AnthropicClient {
                             prompt_tokens_details: None,
                         })
                     }),
-                });
+                })
             }
             _ => {
                 // Skip unknown events
