@@ -6,26 +6,50 @@ use reqwest::{Client as ReqwestClient, Error as ReqwestError};
 use serde::{Deserialize, Serialize};
 use stakpak_shared::models::integrations::openai::{
     AgentModel, ChatCompletionResponse, ChatCompletionStreamResponse, ChatMessage, MessageContent,
-    Role, Tool, ToolCall, ToolCallDelta, ChatMessageDelta, ChatCompletionChoice,
-    ChatCompletionStreamChoice, Usage, FinishReason, FunctionCall, FunctionCallDelta,
+    Role, Tool, ToolCall, ChatMessageDelta, ChatCompletionChoice,
+    ChatCompletionStreamChoice, Usage, FinishReason, FunctionCall,
     PromptTokensDetails,
 };
 use stakpak_shared::tls_client::TlsClientConfig;
 use stakpak_shared::tls_client::create_tls_client;
 use super::ApiStreamError;
+use std::sync::Mutex;
 
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
 #[derive(Clone, Debug)]
-pub struct AnthropicClient {
-    client: ReqwestClient,
-    api_key: String,
+pub enum AnthropicAuth {
+    ApiKey(String),
+    OAuth(AnthropicOAuthConfig),
+}
+
+#[derive(Clone, Debug)]
+pub struct AnthropicOAuthConfig {
+    pub refresh_token: String,
+    pub access_token: String,
+    pub expires: u64, // milliseconds since Unix epoch
 }
 
 #[derive(Clone, Debug)]
 pub struct AnthropicClientConfig {
-    pub api_key: String,
+    pub auth: AnthropicAuth,
+}
+
+#[derive(Debug)]
+pub struct AnthropicClient {
+    client: ReqwestClient,
+    auth: Mutex<AnthropicAuth>,
+}
+
+impl Clone for AnthropicClient {
+    fn clone(&self) -> Self {
+        let auth = self.auth.lock().unwrap().clone();
+        Self {
+            client: self.client.clone(),
+            auth: Mutex::new(auth),
+        }
+    }
 }
 
 #[derive(Serialize, Debug)]
@@ -115,11 +139,8 @@ struct AnthropicStreamEvent {
 
 impl AnthropicClient {
     pub fn new(config: &AnthropicClientConfig) -> Result<Self, String> {
+        // Base headers that are always needed
         let mut headers = HeaderMap::new();
-        headers.insert(
-            "x-api-key",
-            config.api_key.parse().map_err(|e| format!("Invalid API key format: {}", e))?,
-        );
         headers.insert(
             "anthropic-version",
             ANTHROPIC_VERSION.parse().map_err(|e| format!("Invalid version header: {}", e))?,
@@ -143,8 +164,86 @@ impl AnthropicClient {
 
         Ok(Self {
             client,
-            api_key: config.api_key.clone(),
+            auth: Mutex::new(config.auth.clone()),
         })
+    }
+
+    async fn get_valid_access_token(&self) -> Result<String, String> {
+        // First, check if we need to refresh
+        let should_refresh = {
+            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            match &*auth {
+                AnthropicAuth::ApiKey(_) => false,
+                AnthropicAuth::OAuth(oauth) => {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64;
+
+                    // Refresh if token expires within 5 minutes
+                    oauth.expires < now + (5 * 60 * 1000)
+                }
+            }
+        };
+
+        if should_refresh {
+            self.refresh_token().await?;
+        }
+
+        // Get the token
+        let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        match &*auth {
+            AnthropicAuth::ApiKey(key) => Ok(key.clone()),
+            AnthropicAuth::OAuth(oauth) => Ok(oauth.access_token.clone()),
+        }
+    }
+
+    async fn refresh_token(&self) -> Result<(), String> {
+        let refresh_token = {
+            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            match &*auth {
+                AnthropicAuth::OAuth(oauth) => oauth.refresh_token.clone(),
+                _ => return Err("Not using OAuth authentication".to_string()),
+            }
+        };
+
+        let response = self.client
+            .post("https://console.anthropic.com/v1/oauth/token")
+            .json(&serde_json::json!({
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+            }))
+            .send()
+            .await
+            .map_err(|e| format!("Token refresh failed: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Token refresh returned {}", response.status()));
+        }
+
+        let json: serde_json::Value = response.json().await
+            .map_err(|e| format!("Failed to parse refresh response: {}", e))?;
+
+        // Update the auth with new tokens
+        let mut auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        if let AnthropicAuth::OAuth(oauth_mut) = &mut *auth {
+            oauth_mut.access_token = json["access_token"]
+                .as_str()
+                .ok_or("Missing access_token")?
+                .to_string();
+            oauth_mut.refresh_token = json["refresh_token"]
+                .as_str()
+                .unwrap_or(&oauth_mut.refresh_token)
+                .to_string();
+            oauth_mut.expires = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64
+                + (json["expires_in"].as_u64().unwrap_or(3600) * 1000);
+        }
+
+        Ok(())
     }
 
     fn map_model_to_anthropic(model: &AgentModel) -> String {
@@ -373,9 +472,27 @@ impl AnthropicClient {
             system: system_message,
         };
 
-        let response = self
-            .client
-            .post(ANTHROPIC_API_URL)
+        // Get valid token and set up headers based on auth type
+        let token = self.get_valid_access_token().await?;
+        let mut request_builder = self.client.post(ANTHROPIC_API_URL);
+
+        let is_oauth = {
+            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            matches!(&*auth, AnthropicAuth::OAuth(_))
+        };
+
+        if is_oauth {
+            request_builder = request_builder
+                .header("authorization", format!("Bearer {}", token))
+                .header(
+                    "anthropic-beta",
+                    "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14"
+                );
+        } else {
+            request_builder = request_builder.header("x-api-key", token);
+        }
+
+        let response = request_builder
             .json(&request)
             .send()
             .await
@@ -425,9 +542,27 @@ impl AnthropicClient {
             system: system_message,
         };
 
-        let response = self
-            .client
-            .post(ANTHROPIC_API_URL)
+        // Get valid token and set up headers based on auth type
+        let token = self.get_valid_access_token().await?;
+        let mut request_builder = self.client.post(ANTHROPIC_API_URL);
+
+        let is_oauth = {
+            let auth = self.auth.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            matches!(&*auth, AnthropicAuth::OAuth(_))
+        };
+
+        if is_oauth {
+            request_builder = request_builder
+                .header("authorization", format!("Bearer {}", token))
+                .header(
+                    "anthropic-beta",
+                    "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14"
+                );
+        } else {
+            request_builder = request_builder.header("x-api-key", token);
+        }
+
+        let response = request_builder
             .json(&request)
             .send()
             .await

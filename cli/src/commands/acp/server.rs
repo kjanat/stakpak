@@ -72,6 +72,7 @@ impl StakpakAcpAgent {
                 api_key: Some("dummy_for_initialization".to_string()),
                 api_endpoint: api_config.api_endpoint.clone(),
                 anthropic_api_key: None,
+                anthropic_oauth: None,
                 provider: None,
             })
             .map_err(|e| format!("Failed to create client: {}", e))?

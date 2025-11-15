@@ -34,6 +34,8 @@ pub struct ProfileConfig {
     pub api_key: Option<String>,
     /// Anthropic API key for Claude Code integration
     pub anthropic_api_key: Option<String>,
+    /// Anthropic OAuth tokens for Claude Pro/Max subscription
+    pub anthropic_oauth: Option<AnthropicOAuth>,
     /// LLM Provider: "stakpak" or "anthropic"
     pub provider: Option<String>,
     /// Allowed tools (empty = all tools allowed)
@@ -44,6 +46,14 @@ pub struct ProfileConfig {
     pub rulebooks: Option<RulebookConfig>,
     /// Warden (runtime security) configuration
     pub warden: Option<WardenConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AnthropicOAuth {
+    pub refresh_token: String,
+    pub access_token: String,
+    /// Expiry time in milliseconds since Unix epoch
+    pub expires: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -63,6 +73,7 @@ pub struct AppConfig {
     pub api_endpoint: String,
     pub api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
+    pub anthropic_oauth: Option<AnthropicOAuth>,
     pub provider: Option<String>,
     pub mcp_server_host: Option<String>,
     pub machine_name: Option<String>,
@@ -107,10 +118,19 @@ impl From<AppConfig> for ClientConfig {
             _ => None,
         });
 
+        let anthropic_oauth = config.anthropic_oauth.as_ref().map(|oauth| {
+            stakpak_api::AnthropicOAuthTokens {
+                refresh_token: oauth.refresh_token.clone(),
+                access_token: oauth.access_token.clone(),
+                expires: oauth.expires,
+            }
+        });
+
         ClientConfig {
             api_key: config.api_key.clone(),
             api_endpoint: config.api_endpoint.clone(),
             anthropic_api_key: config.anthropic_api_key.clone(),
+            anthropic_oauth,
             provider,
         }
     }
@@ -286,6 +306,10 @@ impl AppConfig {
             .anthropic_api_key
             .or_else(|| all_profile.and_then(|all| all.anthropic_api_key.clone()));
 
+        let anthropic_oauth = profile
+            .anthropic_oauth
+            .or_else(|| all_profile.and_then(|all| all.anthropic_oauth.clone()));
+
         let provider = profile
             .provider
             .or_else(|| all_profile.and_then(|all| all.provider.clone()));
@@ -316,6 +340,7 @@ impl AppConfig {
             api_endpoint,
             api_key,
             anthropic_api_key,
+            anthropic_oauth,
             provider,
             mcp_server_host: None, // This can be added to profiles later if needed
             machine_name: config_file.settings.machine_name,
@@ -413,6 +438,7 @@ impl AppConfig {
                 api_endpoint: Some(self.api_endpoint.clone()),
                 api_key: self.api_key.clone(),
                 anthropic_api_key: self.anthropic_api_key.clone(),
+                anthropic_oauth: self.anthropic_oauth.clone(),
                 provider: self.provider.clone(),
                 allowed_tools: self.allowed_tools.clone(),
                 auto_approve: self.auto_approve.clone(),

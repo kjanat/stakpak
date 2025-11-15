@@ -12,6 +12,7 @@ use stakpak_mcp_server::{EnabledToolsConfig, MCPServerConfig, ToolMode, start_se
 
 pub mod acp;
 pub mod agent;
+pub mod auth;
 pub mod auto_update;
 pub mod warden;
 
@@ -98,6 +99,10 @@ pub enum Commands {
     /// Logout from Stakpak
     Logout,
 
+    /// Authentication management (Anthropic OAuth, etc.)
+    #[command(subcommand)]
+    Auth(auth::AuthCommands),
+
     /// Start Agent Client Protocol server (for editor integration)
     ///
     Acp {
@@ -175,6 +180,7 @@ impl Commands {
             self,
             Commands::Login { .. }
                 | Commands::Logout
+                | Commands::Auth(_)
                 | Commands::Set { .. }
                 | Commands::Config(_)
                 | Commands::Version
@@ -284,6 +290,10 @@ impl Commands {
                 updated_config
                     .save()
                     .map_err(|e| format!("Failed to save config: {}", e))?;
+            }
+            Commands::Auth(auth_cmd) => {
+                let mut updated_config = config.clone();
+                auth::handle_auth_command(auth_cmd, &mut updated_config).await?;
             }
             Commands::Set {
                 machine_name,

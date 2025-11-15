@@ -42,11 +42,19 @@ pub enum LLMProvider {
 }
 
 #[derive(Clone, Debug)]
+pub struct AnthropicOAuthTokens {
+    pub refresh_token: String,
+    pub access_token: String,
+    pub expires: u64, // milliseconds since Unix epoch
+}
+
+#[derive(Clone, Debug)]
 
 pub struct ClientConfig {
     pub api_key: Option<String>,
     pub api_endpoint: String,
     pub anthropic_api_key: Option<String>,
+    pub anthropic_oauth: Option<AnthropicOAuthTokens>,
     pub provider: Option<LLMProvider>,
 }
 
@@ -90,7 +98,7 @@ impl Client {
     pub fn new(config: &ClientConfig) -> Result<Self, String> {
         // Determine which provider to use
         let provider = config.provider.clone().unwrap_or_else(|| {
-            if config.anthropic_api_key.is_some() {
+            if config.anthropic_oauth.is_some() || config.anthropic_api_key.is_some() {
                 LLMProvider::Anthropic
             } else {
                 LLMProvider::Stakpak
@@ -133,13 +141,26 @@ impl Client {
         };
 
         let anthropic_client = if provider == LLMProvider::Anthropic {
-            if config.anthropic_api_key.is_none() {
-                return Err("Anthropic API Key not found. Please set ANTHROPIC_API_KEY environment variable or configure it in your profile.".into());
+            // Check if we have OAuth tokens or API key
+            if config.anthropic_oauth.is_none() && config.anthropic_api_key.is_none() {
+                return Err("Anthropic authentication not found. Please run 'stakpak auth login anthropic' or set ANTHROPIC_API_KEY.".into());
             }
 
-            Some(anthropic::AnthropicClient::new(&anthropic::AnthropicClientConfig {
-                api_key: config.anthropic_api_key.clone().unwrap(),
-            })?)
+            let auth_config = if let Some(oauth) = config.anthropic_oauth.as_ref() {
+                anthropic::AnthropicClientConfig {
+                    auth: anthropic::AnthropicAuth::OAuth(anthropic::AnthropicOAuthConfig {
+                        refresh_token: oauth.refresh_token.clone(),
+                        access_token: oauth.access_token.clone(),
+                        expires: oauth.expires,
+                    }),
+                }
+            } else {
+                anthropic::AnthropicClientConfig {
+                    auth: anthropic::AnthropicAuth::ApiKey(config.anthropic_api_key.clone().unwrap()),
+                }
+            };
+
+            Some(anthropic::AnthropicClient::new(&auth_config)?)
         } else {
             None
         };

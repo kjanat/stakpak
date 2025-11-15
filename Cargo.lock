@@ -4711,6 +4711,7 @@ version = "0.2.76"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
+ "base64 0.22.1",
  "chrono",
  "clap 4.5.41",
  "config",
@@ -4732,6 +4733,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
  "stakpak-api",
  "stakpak-mcp-client",
  "stakpak-mcp-server",
@@ -4744,6 +4746,7 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
+ "urlencoding",
  "uuid",
  "walkdir",
  "zip",

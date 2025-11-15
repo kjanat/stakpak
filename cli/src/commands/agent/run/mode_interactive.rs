@@ -123,6 +123,7 @@ pub async fn run_interactive(
                         api_key: ctx_clone.api_key.clone(),
                         api_endpoint: ctx_clone.api_endpoint.clone(),
                         anthropic_api_key: ctx_clone.anthropic_api_key.clone(),
+                        anthropic_oauth: None,
                         provider: None,
                     },
                     redact_secrets,
@@ -198,6 +199,7 @@ pub async fn run_interactive(
                 api_key: api_key_for_client.clone(),
                 api_endpoint: api_endpoint_for_client.clone(),
                 anthropic_api_key: anthropic_api_key_for_client.clone(),
+                anthropic_oauth: None,
                 provider: None,
             })
             .map_err(|e| e.to_string())?;
@@ -937,6 +939,7 @@ pub async fn run_interactive(
                 api_key: new_config.api_key.clone(),
                 api_endpoint: new_config.api_endpoint.clone(),
                 anthropic_api_key: new_config.anthropic_api_key.clone(),
+                anthropic_oauth: None,
                 provider: None,
             })
             .map_err(|e| e.to_string())?;
@@ -965,6 +968,7 @@ pub async fn run_interactive(
             api_key: ctx.api_key.clone(),
             api_endpoint: ctx.api_endpoint.clone(),
             anthropic_api_key: ctx.anthropic_api_key.clone(),
+            anthropic_oauth: None,
             provider: None,
         })
         .map_err(|e| e.to_string())?;

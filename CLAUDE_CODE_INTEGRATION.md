@@ -1,21 +1,35 @@
 # Claude Code Integration
 
-Stakpak now supports direct integration with Anthropic's Claude API, allowing you to use your Claude Code subscription or Anthropic API key directly without going through Stakpak's backend.
+Stakpak now supports direct integration with Anthropic's Claude API, with **two authentication methods**:
+
+1. **Claude Pro/Max OAuth** - Use your Claude subscription (FREE API usage included!)
+2. **Anthropic API Key** - Use pay-per-use API keys from console.anthropic.com
 
 ## Quick Start
 
-### Option 1: Environment Variable (Recommended)
+### Option 1: Claude Pro/Max OAuth (Recommended - FREE!)
 
-Simply set your Anthropic API key as an environment variable:
+Use your existing Claude Pro or Claude Max subscription:
+
+```bash
+# Login with your Claude Pro/Max account
+stakpak auth login anthropic
+
+# Follow the browser prompts to authenticate
+# Then use stakpak normally - API usage is FREE with your subscription!
+stakpak
+```
+
+### Option 2: Environment Variable (API Key)
+
+For pay-per-use with an API key:
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-api03-..."
 stakpak
 ```
 
-Stakpak will automatically detect the Anthropic API key and use it instead of the Stakpak backend.
-
-### Option 2: Configuration Profile
+### Option 3: Configuration Profile (API Key)
 
 Add an Anthropic-powered profile to your `~/.stakpak/config.toml`:
 
@@ -38,7 +52,21 @@ export STAKPAK_PROFILE=claude
 stakpak
 ```
 
-### Option 3: Mixed Configuration
+### Option 4: Configuration Profile (OAuth)
+
+After running `stakpak auth login anthropic`, your config is automatically updated:
+
+```toml
+[profiles.default]
+provider = "anthropic"
+
+[profiles.default.anthropic_oauth]
+refresh_token = "<stored securely>"
+access_token = "<auto-refreshed>"
+expires = 1234567890000
+```
+
+### Option 5: Mixed Configuration
 
 You can have both Stakpak and Anthropic profiles in your config:
 
@@ -143,26 +171,91 @@ volumes = [
 | `STAKPAK_API_ENDPOINT` | Custom Stakpak endpoint |
 | `STAKPAK_PROFILE` | Profile to use (default: "default") |
 
-## Getting Your API Key
+## Authentication Methods
 
-### Anthropic API Key
+### Method 1: Claude Pro/Max OAuth (FREE API Access!)
+
+**Benefits:**
+- ✅ Free API usage included with your Claude Pro/Max subscription
+- ✅ No per-token charges
+- ✅ Same models as API (Claude Sonnet 4, Haiku 4)
+- ✅ Automatic token refresh
+
+**How to use:**
+
+```bash
+# Login once
+stakpak auth login anthropic
+
+# Your browser will open to claude.ai
+# Login with your Claude Pro/Max account
+# Copy the authorization code shown
+# Paste it into the terminal
+
+# Done! Now use stakpak for free
+stakpak "help me refactor this code"
+```
+
+**Logout:**
+
+```bash
+stakpak auth logout anthropic
+```
+
+### Method 2: Anthropic API Key (Pay-per-use)
+
+**When to use:**
+- You don't have Claude Pro/Max subscription
+- You need programmatic API access
+- You're building commercial applications
+
+**How to get an API key:**
 
 1. Sign up at [console.anthropic.com](https://console.anthropic.com)
 2. Navigate to API Keys section
 3. Create a new API key
-4. Set it as `ANTHROPIC_API_KEY` environment variable or in your config
-
-### Stakpak API Key
+4. Use it:
 
 ```bash
-stakpak login
+export ANTHROPIC_API_KEY="sk-ant-api03-..."
+stakpak
+```
+
+Or add to config:
+
+```toml
+[profiles.default]
+anthropic_api_key = "sk-ant-api03-..."
+provider = "anthropic"
+```
+
+### Method 3: Stakpak Backend
+
+**When to use:**
+- You want access to rulebooks and enterprise features
+- You need session tracking and analytics
+- You want semantic code search for infrastructure
+
+```bash
+stakpak login --api-key <your-stakpak-key>
 ```
 
 Or visit [stakpak.dev/generate-api-keys](https://stakpak.dev/generate-api-keys)
 
 ## Examples
 
-### Use Claude Code for a single session
+### Use Claude Pro/Max subscription (FREE!)
+
+```bash
+# Login once
+stakpak auth login anthropic
+
+# Use for free forever (included in your subscription)
+stakpak "review my code"
+stakpak --async "refactor src/ to use async/await"
+```
+
+### Use API key for a single session
 
 ```bash
 ANTHROPIC_API_KEY="sk-ant-..." stakpak
@@ -171,11 +264,11 @@ ANTHROPIC_API_KEY="sk-ant-..." stakpak
 ### Switch between providers
 
 ```bash
-# Use Anthropic
-stakpak --profile claude "review my code"
-
-# Use Stakpak backend
+# Use Anthropic OAuth (free with subscription)
 stakpak --profile default "review my code"
+
+# Use Stakpak backend (for enterprise features)
+stakpak --profile stakpak "review my code"
 ```
 
 ### Use Claude Code for async tasks
@@ -221,9 +314,21 @@ This means you can seamlessly switch between providers without changing your con
 
 ## Pricing
 
-### Anthropic Direct
+### Claude Pro/Max OAuth (Recommended)
 
-When using Anthropic directly, you pay Anthropic's standard API rates:
+**FREE!** 🎉
+
+When you login with `stakpak auth login anthropic` using your Claude Pro or Max subscription:
+- ✅ **$0 per API call** - Included in your subscription
+- ✅ All models available (Sonnet 4, Haiku 4)
+- ✅ Same quality as paid API
+- ✅ No usage limits beyond your subscription tier
+
+This is the same authentication used by Claude Code and other official clients.
+
+### Anthropic API Key (Pay-per-use)
+
+When using an API key from console.anthropic.com:
 
 - **Claude Sonnet 4**: $3/1M input tokens, $15/1M output tokens
 - **Claude Haiku 4**: $1/1M input tokens, $5/1M output tokens
@@ -239,9 +344,16 @@ Stakpak offers competitive pricing with additional features:
 
 ## Troubleshooting
 
-### "Anthropic client not configured" error
+### "Anthropic authentication not found" error
 
-Make sure you've set your API key:
+You need to either login with OAuth or set an API key:
+
+**Option 1: OAuth (FREE with Claude Pro/Max):**
+```bash
+stakpak auth login anthropic
+```
+
+**Option 2: API Key:**
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
@@ -251,6 +363,23 @@ Or add it to your profile:
 [profiles.default]
 anthropic_api_key = "sk-ant-..."
 ```
+
+### "Token refresh failed" error
+
+Your OAuth tokens may have expired. Re-login:
+
+```bash
+stakpak auth logout anthropic
+stakpak auth login anthropic
+```
+
+### Authorization code format error
+
+When pasting the authorization code, make sure to include both parts:
+- Format: `<code>#<state>`
+- Example: `abc123def456#xyz789`
+
+Copy the entire string shown in your browser after authorization.
 
 ### "This operation requires a Stakpak API key" error
 

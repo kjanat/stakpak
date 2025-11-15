@@ -76,6 +76,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
                     api_key: ctx_clone.api_key.clone(),
                     api_endpoint: ctx_clone.api_endpoint.clone(),
                     anthropic_api_key: ctx_clone.anthropic_api_key.clone(),
+                    anthropic_oauth: None,
                     provider: None,
                 },
                 redact_secrets: config.redact_secrets,
@@ -107,6 +108,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
         api_key: ctx.api_key.clone(),
         api_endpoint: ctx.api_endpoint.clone(),
         anthropic_api_key: ctx.anthropic_api_key.clone(),
+        anthropic_oauth: None,
         provider: None,
     })
     .map_err(|e| e.to_string())?;
