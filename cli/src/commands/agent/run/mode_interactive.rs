@@ -180,11 +180,11 @@ pub async fn run_interactive(
         });
 
         // Spawn client task
-        let ctx_for_client = ctx.clone();
+        let mut ctx_for_client = ctx.clone();
         let shutdown_tx_for_client = shutdown_tx.clone();
         let client_handle: tokio::task::JoinHandle<ClientTaskResult> = tokio::spawn(async move {
             let mut current_session_id: Option<Uuid> = None;
-            let client = Client::new(&ctx_for_client.clone().into()).map_err(|e| e.to_string())?;
+            let mut client = Client::new(&ctx_for_client.clone().into()).map_err(|e| e.to_string())?;
 
             let data = client.get_my_account().await?;
             send_input_event(&input_tx, InputEvent::GetStatus(data.to_text())).await?;
@@ -801,6 +801,10 @@ pub async fn run_interactive(
                             InputEvent::SetProviderInfo(provider_name, auth_type),
                         )
                         .await?;
+
+                        // Replace the long-lived client and context with the new ones
+                        client = new_client;
+                        ctx_for_client = updated_config;
 
                         continue;
                     }

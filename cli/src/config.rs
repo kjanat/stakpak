@@ -419,6 +419,12 @@ impl AppConfig {
         let config_str = toml::to_string_pretty(&config_file)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
+        // Ensure parent directory exists
+        if let Some(parent) = Path::new(config_path).parent() {
+            create_dir_all(parent)
+                .map_err(|e| format!("Failed to create config directory: {}", e))?;
+        }
+
         write(config_path, config_str).map_err(|e| format!("Failed to save config: {}", e))?;
 
         Ok(())
@@ -431,9 +437,14 @@ impl AppConfig {
     ) -> Result<ProfileInfo, String> {
         let config = Self::load(profile_name, custom_config_path).map_err(|e| e.to_string())?;
 
+        // Check if any credentials are present (Stakpak or Anthropic)
+        let has_any_credentials = config.api_key.is_some()
+            || config.anthropic_api_key.is_some()
+            || config.anthropic_oauth.is_some();
+
         Ok(ProfileInfo {
             name: profile_name.to_string(),
-            has_api_key: config.api_key.is_some(),
+            has_api_key: has_any_credentials,
             allowed_tools_count: config.allowed_tools.as_ref().map(|t| t.len()).unwrap_or(0),
             auto_approve_count: config.auto_approve.as_ref().map(|t| t.len()).unwrap_or(0),
             is_restricted: config
