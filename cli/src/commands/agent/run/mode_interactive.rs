@@ -697,6 +697,89 @@ pub async fn run_interactive(
                             total_session_usage,
                         ));
                     }
+                    OutputEvent::RequestProviderSwitch(requested_provider) => {
+                        // Validate the provider
+                        let new_provider = match requested_provider.as_str() {
+                            "stakpak" => "stakpak",
+                            "anthropic" => "anthropic",
+                            _ => {
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::Error("Invalid provider. Use 'stakpak' or 'anthropic'".to_string()),
+                                )
+                                .await?;
+                                continue;
+                            }
+                        };
+
+                        // Check if we have credentials for the requested provider
+                        let has_credentials = match new_provider {
+                            "stakpak" => ctx_for_client.api_key.is_some(),
+                            "anthropic" => ctx_for_client.anthropic_api_key.is_some() || ctx_for_client.anthropic_oauth.is_some(),
+                            _ => false,
+                        };
+
+                        if !has_credentials {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::Error(format!("No credentials found for {} provider", new_provider)),
+                            )
+                            .await?;
+                            continue;
+                        }
+
+                        // Update the current profile's provider field
+                        let profile_name = ctx_for_client.profile_name.clone();
+                        if let Err(e) = AppConfig::update_profile_provider(&config_path, &profile_name, Some(new_provider.to_string())) {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::Error(format!("Failed to update provider: {}", e)),
+                            )
+                            .await?;
+                            continue;
+                        }
+
+                        // Reload the config with the new provider
+                        let updated_config = match AppConfig::load(&profile_name, Some(&config_path)) {
+                            Ok(cfg) => cfg,
+                            Err(e) => {
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::Error(format!("Failed to reload config: {}", e)),
+                                )
+                                .await?;
+                                continue;
+                            }
+                        };
+
+                        // Create a new client with the updated provider
+                        let new_client = match Client::new(&updated_config.clone().into()) {
+                            Ok(client) => client,
+                            Err(e) => {
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::Error(format!("Failed to create client: {}", e)),
+                                )
+                                .await?;
+                                continue;
+                            }
+                        };
+
+                        // Send provider info to TUI
+                        let provider_name = new_client.get_provider_display_name();
+                        let auth_type = if updated_config.anthropic_oauth.is_some() {
+                            "OAuth".to_string()
+                        } else if updated_config.anthropic_api_key.is_some() {
+                            "API Key (Anthropic)".to_string()
+                        } else if updated_config.api_key.is_some() {
+                            "API Key (Stakpak)".to_string()
+                        } else {
+                            "Unknown".to_string()
+                        };
+                        send_input_event(&input_tx, InputEvent::SetProviderInfo(provider_name, auth_type)).await?;
+
+                        continue;
+                    }
                     OutputEvent::RequestRulebookUpdate(selected_uris) => {
                         // Update the rulebooks list based on selected URIs
                         if let Some(all_rulebooks) = &all_available_rulebooks {

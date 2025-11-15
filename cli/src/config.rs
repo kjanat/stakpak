@@ -398,6 +398,33 @@ impl AppConfig {
         Ok(profiles)
     }
 
+    /// Update the provider for a specific profile
+    pub fn update_profile_provider(
+        config_path: &str,
+        profile_name: &str,
+        provider: Option<String>,
+    ) -> Result<(), String> {
+        // Load the config file
+        let mut config_file = Self::load_config_file(config_path)
+            .map_err(|e| format!("Failed to load config: {}", e))?;
+
+        // Update the profile's provider field
+        if let Some(profile) = config_file.profiles.get_mut(profile_name) {
+            profile.provider = provider;
+        } else {
+            return Err(format!("Profile '{}' not found", profile_name));
+        }
+
+        // Save the updated config
+        let config_str = toml::to_string_pretty(&config_file)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+        write(config_path, config_str)
+            .map_err(|e| format!("Failed to save config: {}", e))?;
+
+        Ok(())
+    }
+
     /// Get profile display info
     pub fn get_profile_info(
         profile_name: &str,
