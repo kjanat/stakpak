@@ -184,7 +184,8 @@ pub async fn run_interactive(
         let shutdown_tx_for_client = shutdown_tx.clone();
         let client_handle: tokio::task::JoinHandle<ClientTaskResult> = tokio::spawn(async move {
             let mut current_session_id: Option<Uuid> = None;
-            let mut client = Client::new(&ctx_for_client.clone().into()).map_err(|e| e.to_string())?;
+            let mut client =
+                Client::new(&ctx_for_client.clone().into()).map_err(|e| e.to_string())?;
 
             let data = client.get_my_account().await?;
             send_input_event(&input_tx, InputEvent::GetStatus(data.to_text())).await?;
