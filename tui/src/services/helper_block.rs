@@ -62,7 +62,7 @@ pub fn push_status_message(state: &mut AppState) {
         }
     }
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(vec![Span::styled(
             format!("Stakpak Code Status v{}", version),
             Style::default()
@@ -78,17 +78,33 @@ pub fn push_status_message(state: &mut AppState) {
         )]),
         Line::from(format!("  L {}", cwd)),
         Line::from(""),
-        Line::from(vec![Span::styled(
-            "Account",
+    ];
+
+    // Add Profile section if provider info is available
+    if !state.provider_name.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            "Profile",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(format!("  L Username: {}", username)),
-        Line::from(format!("  L ID: {}", id)),
-        Line::from(format!("  L Name: {}", name)),
-        Line::from(""),
-    ];
+        )]));
+        lines.push(Line::from(format!("  L Name: {}", state.current_profile_name)));
+        lines.push(Line::from(format!("  L Provider: {}", state.provider_name)));
+        lines.push(Line::from(format!("  L Auth: {}", state.provider_auth_type)));
+        lines.push(Line::from(""));
+    }
+
+    // Add Account section
+    lines.push(Line::from(vec![Span::styled(
+        "Account",
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )]));
+    lines.push(Line::from(format!("  L Username: {}", username)));
+    lines.push(Line::from(format!("  L ID: {}", id)));
+    lines.push(Line::from(format!("  L Name: {}", name)));
+    lines.push(Line::from(""));
     state.messages.push(Message {
         id: uuid::Uuid::new_v4(),
         content: MessageContent::StyledBlock(lines),

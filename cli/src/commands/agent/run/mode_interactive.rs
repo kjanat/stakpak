@@ -189,6 +189,20 @@ pub async fn run_interactive(
 
             let data = client.get_my_account().await?;
             send_input_event(&input_tx, InputEvent::GetStatus(data.to_text())).await?;
+
+            // Send provider information
+            let provider_name = client.get_provider_display_name();
+            let auth_type = if ctx_for_client.anthropic_oauth.is_some() {
+                "OAuth".to_string()
+            } else if ctx_for_client.anthropic_api_key.is_some() {
+                "API Key (Anthropic)".to_string()
+            } else if ctx_for_client.api_key.is_some() {
+                "API Key (Stakpak)".to_string()
+            } else {
+                "Unknown".to_string()
+            };
+            send_input_event(&input_tx, InputEvent::SetProviderInfo(provider_name, auth_type)).await?;
+
             // Load available profiles and send to TUI
             let profiles_config_path = ctx_for_client.config_path.clone();
             let current_profile_name = ctx_for_client.profile_name.clone();

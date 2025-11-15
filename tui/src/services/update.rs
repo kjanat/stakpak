@@ -677,6 +677,10 @@ pub fn update(
         InputEvent::GetStatus(account_info) => {
             state.account_info = account_info;
         }
+        InputEvent::SetProviderInfo(provider_name, auth_type) => {
+            state.provider_name = provider_name;
+            state.provider_auth_type = auth_type;
+        }
         InputEvent::Tab => {
             if state.show_collapsed_messages {
                 handle_collapsed_messages_tab(state, message_area_height, message_area_width);

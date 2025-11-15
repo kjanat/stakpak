@@ -9,6 +9,7 @@ use stakpak_shared::tls_client::TlsClientConfig;
 use stakpak_shared::tls_client::create_tls_client;
 pub mod anthropic;
 pub mod models;
+pub mod provider_registry;
 use futures_util::Stream;
 use futures_util::StreamExt;
 use models::*;
@@ -180,6 +181,26 @@ impl Client {
             anthropic_client,
             provider,
         })
+    }
+
+    /// Get the current provider
+    pub fn get_provider(&self) -> &LLMProvider {
+        &self.provider
+    }
+
+    /// Get provider information including available models
+    pub fn get_provider_info(&self) -> provider_registry::ProviderInfo {
+        provider_registry::get_provider_info(&self.provider)
+    }
+
+    /// Get available models for the current provider
+    pub fn get_available_models(&self) -> Vec<provider_registry::ModelInfo> {
+        self.get_provider_info().models
+    }
+
+    /// Get the display name of the current provider
+    pub fn get_provider_display_name(&self) -> String {
+        self.get_provider_info().display_name
     }
 
     pub async fn get_my_account(&self) -> Result<GetMyAccountResponse, String> {

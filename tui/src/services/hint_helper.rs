@@ -98,9 +98,14 @@ pub fn render_hint_or_shortcuts(f: &mut Frame, state: &AppState, area: Rect) {
             let total_width = area.width as usize;
             let left_len = left_text.len();
             let (right_text, right_style) = {
+                let provider_text = if !state.provider_name.is_empty() {
+                    format!(" ({})", state.provider_name.to_lowercase())
+                } else {
+                    String::new()
+                };
                 let profile_text = format!(
-                    "model {} | profile {}",
-                    state.model, state.current_profile_name
+                    "model {} | profile {}{}",
+                    state.model, state.current_profile_name, provider_text
                 );
                 let rulebooks_text = " | ctrl+k: rulebooks";
                 (
@@ -137,6 +142,13 @@ pub fn render_hint_or_shortcuts(f: &mut Frame, state: &AppState, area: Rect) {
                     state.current_profile_name.clone(),
                     Style::default().fg(Color::Reset),
                 ));
+                // Add provider name if available
+                if !state.provider_name.is_empty() {
+                    spans.push(Span::styled(
+                        format!(" ({})", state.provider_name.to_lowercase()),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
                 spans.push(Span::styled(
                     " | ctrl+k: rulebooks",
                     Style::default().fg(Color::DarkGray),
