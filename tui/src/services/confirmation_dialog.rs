@@ -3,11 +3,11 @@ use crate::{
     services::{detect_term::should_use_rgb_colors, message::get_wrapped_message_lines_cached},
 };
 use ratatui::{
-    Frame,
     layout::Alignment,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
+    Frame,
 };
 
 fn term_color(color: Color) -> Color {
