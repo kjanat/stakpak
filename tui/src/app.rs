@@ -375,8 +375,8 @@ pub enum OutputEvent {
     RequestProfileSwitch(String),
     RequestProviderSwitch(String), // Switch provider (stakpak/anthropic)
     RequestRulebookUpdate(Vec<String>), // Selected rulebook URIs
-    RequestCurrentRulebooks,            // Request currently active rulebooks
-    RequestTotalUsage,                  // Request total accumulated token usage
+    RequestCurrentRulebooks,       // Request currently active rulebooks
+    RequestTotalUsage,             // Request total accumulated token usage
     SwitchModel(AgentModel),
 }
 

@@ -184,8 +184,7 @@ pub async fn run_interactive(
         let shutdown_tx_for_client = shutdown_tx.clone();
         let client_handle: tokio::task::JoinHandle<ClientTaskResult> = tokio::spawn(async move {
             let mut current_session_id: Option<Uuid> = None;
-            let client = Client::new(&ctx_for_client.clone().into())
-                .map_err(|e| e.to_string())?;
+            let client = Client::new(&ctx_for_client.clone().into()).map_err(|e| e.to_string())?;
 
             let data = client.get_my_account().await?;
             send_input_event(&input_tx, InputEvent::GetStatus(data.to_text())).await?;
@@ -201,7 +200,11 @@ pub async fn run_interactive(
             } else {
                 "Unknown".to_string()
             };
-            send_input_event(&input_tx, InputEvent::SetProviderInfo(provider_name, auth_type)).await?;
+            send_input_event(
+                &input_tx,
+                InputEvent::SetProviderInfo(provider_name, auth_type),
+            )
+            .await?;
 
             // Load available profiles and send to TUI
             let profiles_config_path = ctx_for_client.config_path.clone();
@@ -705,7 +708,10 @@ pub async fn run_interactive(
                             _ => {
                                 send_input_event(
                                     &input_tx,
-                                    InputEvent::Error("Invalid provider. Use 'stakpak' or 'anthropic'".to_string()),
+                                    InputEvent::Error(
+                                        "Invalid provider. Use 'stakpak' or 'anthropic'"
+                                            .to_string(),
+                                    ),
                                 )
                                 .await?;
                                 continue;
@@ -715,14 +721,20 @@ pub async fn run_interactive(
                         // Check if we have credentials for the requested provider
                         let has_credentials = match new_provider {
                             "stakpak" => ctx_for_client.api_key.is_some(),
-                            "anthropic" => ctx_for_client.anthropic_api_key.is_some() || ctx_for_client.anthropic_oauth.is_some(),
+                            "anthropic" => {
+                                ctx_for_client.anthropic_api_key.is_some()
+                                    || ctx_for_client.anthropic_oauth.is_some()
+                            }
                             _ => false,
                         };
 
                         if !has_credentials {
                             send_input_event(
                                 &input_tx,
-                                InputEvent::Error(format!("No credentials found for {} provider", new_provider)),
+                                InputEvent::Error(format!(
+                                    "No credentials found for {} provider",
+                                    new_provider
+                                )),
                             )
                             .await?;
                             continue;
@@ -730,7 +742,11 @@ pub async fn run_interactive(
 
                         // Update the current profile's provider field
                         let profile_name = ctx_for_client.profile_name.clone();
-                        if let Err(e) = AppConfig::update_profile_provider(&config_path, &profile_name, Some(new_provider.to_string())) {
+                        if let Err(e) = AppConfig::update_profile_provider(
+                            &config_path,
+                            &profile_name,
+                            Some(new_provider.to_string()),
+                        ) {
                             send_input_event(
                                 &input_tx,
                                 InputEvent::Error(format!("Failed to update provider: {}", e)),
@@ -740,17 +756,21 @@ pub async fn run_interactive(
                         }
 
                         // Reload the config with the new provider
-                        let updated_config = match AppConfig::load(&profile_name, Some(&config_path)) {
-                            Ok(cfg) => cfg,
-                            Err(e) => {
-                                send_input_event(
-                                    &input_tx,
-                                    InputEvent::Error(format!("Failed to reload config: {}", e)),
-                                )
-                                .await?;
-                                continue;
-                            }
-                        };
+                        let updated_config =
+                            match AppConfig::load(&profile_name, Some(&config_path)) {
+                                Ok(cfg) => cfg,
+                                Err(e) => {
+                                    send_input_event(
+                                        &input_tx,
+                                        InputEvent::Error(format!(
+                                            "Failed to reload config: {}",
+                                            e
+                                        )),
+                                    )
+                                    .await?;
+                                    continue;
+                                }
+                            };
 
                         // Create a new client with the updated provider
                         let new_client = match Client::new(&updated_config.clone().into()) {
@@ -776,7 +796,11 @@ pub async fn run_interactive(
                         } else {
                             "Unknown".to_string()
                         };
-                        send_input_event(&input_tx, InputEvent::SetProviderInfo(provider_name, auth_type)).await?;
+                        send_input_event(
+                            &input_tx,
+                            InputEvent::SetProviderInfo(provider_name, auth_type),
+                        )
+                        .await?;
 
                         continue;
                     }
@@ -1015,8 +1039,7 @@ pub async fn run_interactive(
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
             // Fetch and filter rulebooks for the new profile
-            let client = Client::new(&new_config.clone().into())
-                .map_err(|e| e.to_string())?;
+            let client = Client::new(&new_config.clone().into()).map_err(|e| e.to_string())?;
 
             let new_rulebooks = client.list_rulebooks().await.ok().map(|rulebooks| {
                 if let Some(rulebook_config) = &new_config.rulebooks {
@@ -1038,8 +1061,7 @@ pub async fn run_interactive(
 
         // Normal exit - no profile switch requested
         // Display final stats and session info
-        let client = Client::new(&ctx.clone().into())
-            .map_err(|e| e.to_string())?;
+        let client = Client::new(&ctx.clone().into()).map_err(|e| e.to_string())?;
 
         // Display session stats
         if let Some(session_id) = final_session_id {

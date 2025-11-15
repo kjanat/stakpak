@@ -88,9 +88,15 @@ pub fn push_status_message(state: &mut AppState) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]));
-        lines.push(Line::from(format!("  L Name: {}", state.current_profile_name)));
+        lines.push(Line::from(format!(
+            "  L Name: {}",
+            state.current_profile_name
+        )));
         lines.push(Line::from(format!("  L Provider: {}", state.provider_name)));
-        lines.push(Line::from(format!("  L Auth: {}", state.provider_auth_type)));
+        lines.push(Line::from(format!(
+            "  L Auth: {}",
+            state.provider_auth_type
+        )));
         lines.push(Line::from(""));
     }
 

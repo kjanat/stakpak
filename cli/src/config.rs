@@ -419,8 +419,7 @@ impl AppConfig {
         let config_str = toml::to_string_pretty(&config_file)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-        write(config_path, config_str)
-            .map_err(|e| format!("Failed to save config: {}", e))?;
+        write(config_path, config_str).map_err(|e| format!("Failed to save config: {}", e))?;
 
         Ok(())
     }

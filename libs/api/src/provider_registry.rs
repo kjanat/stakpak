@@ -28,15 +28,12 @@ pub struct ProviderInfo {
 impl ProviderInfo {
     /// Get model info by AgentModel enum
     pub fn get_model(&self, agent_model: &AgentModel) -> Option<&ModelInfo> {
-        self.models
-            .iter()
-            .find(|m| &m.agent_model == agent_model)
+        self.models.iter().find(|m| &m.agent_model == agent_model)
     }
 
     /// Get the API model ID for an AgentModel
     pub fn get_api_model_id(&self, agent_model: &AgentModel) -> Option<String> {
-        self.get_model(agent_model)
-            .map(|m| m.api_model_id.clone())
+        self.get_model(agent_model).map(|m| m.api_model_id.clone())
     }
 
     /// Get all available model display names

@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use stakpak_shared::models::integrations::openai::{
     AgentModel, ChatCompletionChoice, ChatCompletionResponse, ChatCompletionStreamChoice,
     ChatCompletionStreamResponse, ChatMessage, ChatMessageDelta, FinishReason, FunctionCall,
-    FunctionCallDelta, MessageContent, PromptTokensDetails, Role, Tool, ToolCall,
-    ToolCallDelta, Usage,
+    FunctionCallDelta, MessageContent, PromptTokensDetails, Role, Tool, ToolCall, ToolCallDelta,
+    Usage,
 };
 use stakpak_shared::tls_client::TlsClientConfig;
 use stakpak_shared::tls_client::create_tls_client;
@@ -215,7 +215,9 @@ impl AnthropicClient {
                 .map_err(|e| format!("Lock poisoned: {e}"))?;
             match &*auth {
                 AnthropicAuth::OAuth(oauth) => oauth.refresh_token.clone(),
-                AnthropicAuth::ApiKey(_) => return Err("Not using OAuth authentication".to_string()),
+                AnthropicAuth::ApiKey(_) => {
+                    return Err("Not using OAuth authentication".to_string());
+                }
             }
         };
 
@@ -628,7 +630,8 @@ impl AnthropicClient {
         event_type: &str,
     ) -> Result<ChatCompletionStreamResponse, ApiStreamError> {
         // Parse the event data to extract model if available
-        let event: serde_json::Value = serde_json::from_str(data).unwrap_or(serde_json::Value::Null);
+        let event: serde_json::Value =
+            serde_json::from_str(data).unwrap_or(serde_json::Value::Null);
 
         // Extract model from message_start event or default to "smart"
         let model = if event_type == "message_start" {
@@ -643,9 +646,7 @@ impl AnthropicClient {
         };
 
         match event_type {
-            "error" => Err(ApiStreamError::Unknown(format!(
-                "Anthropic error: {data}"
-            ))),
+            "error" => Err(ApiStreamError::Unknown(format!("Anthropic error: {data}"))),
             "message_start" | "ping" => {
                 // Skip these events, return a minimal delta
                 Ok(ChatCompletionStreamResponse {
@@ -741,10 +742,7 @@ impl AnthropicClient {
                     ApiStreamError::Unknown("No delta in content_block_delta".to_string())
                 })?;
 
-                let delta_type = delta
-                    .get("type")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("");
+                let delta_type = delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
 
                 if delta_type == "text_delta" {
                     // Text content delta
@@ -826,9 +824,7 @@ impl AnthropicClient {
                     ApiStreamError::Unknown("No delta in message_delta".to_string())
                 })?;
 
-                let stop_reason = delta_obj
-                    .get("stop_reason")
-                    .and_then(|s| s.as_str());
+                let stop_reason = delta_obj.get("stop_reason").and_then(|s| s.as_str());
 
                 let finish_reason = match stop_reason {
                     Some("end_turn") => Some(FinishReason::Stop),
@@ -855,8 +851,10 @@ impl AnthropicClient {
                         finish_reason,
                     }],
                     usage: event.get("usage").and_then(|u| {
-                        let input_tokens = u.get("input_tokens")?.as_u64()?.min(u32::MAX as u64) as u32;
-                        let output_tokens = u.get("output_tokens")?.as_u64()?.min(u32::MAX as u64) as u32;
+                        let input_tokens =
+                            u.get("input_tokens")?.as_u64()?.min(u32::MAX as u64) as u32;
+                        let output_tokens =
+                            u.get("output_tokens")?.as_u64()?.min(u32::MAX as u64) as u32;
                         Some(Usage {
                             prompt_tokens: input_tokens,
                             completion_tokens: output_tokens,

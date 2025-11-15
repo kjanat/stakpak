@@ -1594,7 +1594,10 @@ fn handle_input_submitted(
         if input_parts.len() == 1 {
             // Show current provider
             let provider_msg = if !state.provider_name.is_empty() {
-                format!("Current provider: {}\nAuth: {}", state.provider_name, state.provider_auth_type)
+                format!(
+                    "Current provider: {}\nAuth: {}",
+                    state.provider_name, state.provider_auth_type
+                )
             } else {
                 "Provider information not available".to_string()
             };
@@ -1608,7 +1611,11 @@ fn handle_input_submitted(
                 ));
                 let _ = output_tx.try_send(OutputEvent::RequestProviderSwitch(requested_provider));
             } else {
-                push_error_message(state, "Invalid provider. Use 'stakpak' or 'anthropic'.", None);
+                push_error_message(
+                    state,
+                    "Invalid provider. Use 'stakpak' or 'anthropic'.",
+                    None,
+                );
             }
         } else {
             push_error_message(state, "Usage: /provider [stakpak|anthropic]", None);
@@ -2752,8 +2759,10 @@ fn execute_command_palette_selection(
         CommandAction::SwitchProvider => {
             // Show current provider
             let provider_msg = if !state.provider_name.is_empty() {
-                format!("Current provider: {}\nAuth: {}\n\nUse /provider [stakpak|anthropic] to switch",
-                    state.provider_name, state.provider_auth_type)
+                format!(
+                    "Current provider: {}\nAuth: {}\n\nUse /provider [stakpak|anthropic] to switch",
+                    state.provider_name, state.provider_auth_type
+                )
             } else {
                 "Provider information not available".to_string()
             };
