@@ -62,20 +62,20 @@ async fn exchange_code_for_tokens(
         }))
         .send()
         .await
-        .map_err(|e| format!("Failed to exchange code: {}", e))?;
+        .map_err(|e| format!("Failed to exchange code: {e}"))?;
 
     if !response.status().is_success() {
         let error_text = response
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Token exchange failed: {}", error_text));
+        return Err(format!("Token exchange failed: {error_text}"));
     }
 
     let json: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse token response: {}", e))?;
+        .map_err(|e| format!("Failed to parse token response: {e}"))?;
 
     let refresh_token = json["refresh_token"]
         .as_str()
@@ -92,8 +92,9 @@ async fn exchange_code_for_tokens(
     // Calculate expiry time in milliseconds
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| format!("Failed to get current time: {}", e))?
-        .as_millis() as u64;
+        .map_err(|e| format!("Failed to get current time: {e}"))?
+        .as_millis()
+        .min(u64::MAX as u128) as u64;
 
     let expires = now + (expires_in * 1000);
 
@@ -108,8 +109,7 @@ pub async fn handle_auth_command(
         AuthCommands::Login { provider } => {
             if provider != "anthropic" {
                 return Err(format!(
-                    "Unsupported provider: {}. Currently only 'anthropic' is supported.",
-                    provider
+                    "Unsupported provider: {provider}. Currently only 'anthropic' is supported."
                 ));
             }
 
@@ -132,11 +132,11 @@ pub async fn handle_auth_command(
 
             println!("Opening browser for authentication...");
             println!("\nIf the browser doesn't open automatically, visit this URL:");
-            println!("{}\n", auth_url);
+            println!("{auth_url}\n");
 
             // Try to open browser
             if let Err(e) = open::that(&auth_url) {
-                eprintln!("Failed to open browser: {}", e);
+                eprintln!("Failed to open browser: {e}");
             }
 
             println!(
@@ -147,12 +147,12 @@ pub async fn handle_auth_command(
             use std::io::{self, Write};
             io::stdout()
                 .flush()
-                .map_err(|e| format!("Failed to flush stdout: {}", e))?;
+                .map_err(|e| format!("Failed to flush stdout: {e}"))?;
 
             let mut input = String::new();
             io::stdin()
                 .read_line(&mut input)
-                .map_err(|e| format!("Failed to read input: {}", e))?;
+                .map_err(|e| format!("Failed to read input: {e}"))?;
 
             let full_code = input.trim();
 
@@ -193,8 +193,7 @@ pub async fn handle_auth_command(
         AuthCommands::Logout { provider } => {
             if provider != "anthropic" {
                 return Err(format!(
-                    "Unsupported provider: {}. Currently only 'anthropic' is supported.",
-                    provider
+                    "Unsupported provider: {provider}. Currently only 'anthropic' is supported."
                 ));
             }
 

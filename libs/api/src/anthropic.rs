@@ -138,19 +138,19 @@ impl AnthropicClient {
             "anthropic-version",
             ANTHROPIC_VERSION
                 .parse()
-                .map_err(|e| format!("Invalid version header: {}", e))?,
+                .map_err(|e| format!("Invalid version header: {e}"))?,
         );
         headers.insert(
             reqwest::header::CONTENT_TYPE,
             "application/json"
                 .parse()
-                .map_err(|e| format!("Invalid content type: {}", e))?,
+                .map_err(|e| format!("Invalid content type: {e}"))?,
         );
         headers.insert(
             reqwest::header::USER_AGENT,
             format!("Stakpak/{}", env!("CARGO_PKG_VERSION"))
                 .parse()
-                .map_err(|e| format!("Invalid user agent: {}", e))?,
+                .map_err(|e| format!("Invalid user agent: {e}"))?,
         );
 
         let client = create_tls_client(
@@ -171,14 +171,15 @@ impl AnthropicClient {
             let auth = self
                 .auth
                 .lock()
-                .map_err(|e| format!("Lock poisoned: {}", e))?;
+                .map_err(|e| format!("Lock poisoned: {e}"))?;
             match &*auth {
                 AnthropicAuth::ApiKey(_) => false,
                 AnthropicAuth::OAuth(oauth) => {
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as u64;
+                        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                        .as_millis()
+                        .min(u64::MAX as u128) as u64;
 
                     // Refresh if token expires within 5 minutes
                     oauth.expires < now + (5 * 60 * 1000)
@@ -194,7 +195,7 @@ impl AnthropicClient {
         let auth = self
             .auth
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))?;
+            .map_err(|e| format!("Lock poisoned: {e}"))?;
         match &*auth {
             AnthropicAuth::ApiKey(key) => Ok(key.clone()),
             AnthropicAuth::OAuth(oauth) => Ok(oauth.access_token.clone()),
@@ -206,10 +207,10 @@ impl AnthropicClient {
             let auth = self
                 .auth
                 .lock()
-                .map_err(|e| format!("Lock poisoned: {}", e))?;
+                .map_err(|e| format!("Lock poisoned: {e}"))?;
             match &*auth {
                 AnthropicAuth::OAuth(oauth) => oauth.refresh_token.clone(),
-                _ => return Err("Not using OAuth authentication".to_string()),
+                AnthropicAuth::ApiKey(_) => return Err("Not using OAuth authentication".to_string()),
             }
         };
 
@@ -223,7 +224,7 @@ impl AnthropicClient {
             }))
             .send()
             .await
-            .map_err(|e| format!("Token refresh failed: {}", e))?;
+            .map_err(|e| format!("Token refresh failed: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("Token refresh returned {}", response.status()));
@@ -232,13 +233,13 @@ impl AnthropicClient {
         let json: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| format!("Failed to parse refresh response: {}", e))?;
+            .map_err(|e| format!("Failed to parse refresh response: {e}"))?;
 
         // Update the auth with new tokens
         let mut auth = self
             .auth
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))?;
+            .map_err(|e| format!("Lock poisoned: {e}"))?;
         if let AnthropicAuth::OAuth(oauth_mut) = &mut *auth {
             oauth_mut.access_token = json["access_token"]
                 .as_str()
@@ -250,8 +251,9 @@ impl AnthropicClient {
                 .to_string();
             oauth_mut.expires = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                .as_millis()
+                .min(u64::MAX as u128) as u64
                 + (json["expires_in"].as_u64().unwrap_or(3600) * 1000);
         }
 
@@ -316,7 +318,7 @@ impl AnthropicClient {
                                     }
                                 }
                             }
-                            _ => {}
+                            MessageContent::String(_) => {}
                         }
                     }
 
@@ -325,7 +327,7 @@ impl AnthropicClient {
                         for tool_call in tool_calls {
                             let input: serde_json::Value =
                                 serde_json::from_str(&tool_call.function.arguments)
-                                    .unwrap_or(serde_json::json!({}));
+                                    .unwrap_or_else(|_| serde_json::json!({}));
                             blocks.push(AnthropicContentBlock::ToolUse {
                                 id: tool_call.id,
                                 name: tool_call.function.name,
@@ -358,7 +360,7 @@ impl AnthropicClient {
                         });
                     }
                 }
-                _ => {
+                Role::Developer => {
                     // Skip other roles
                 }
             }
@@ -399,7 +401,7 @@ impl AnthropicClient {
                         },
                     });
                 }
-                _ => {}
+                AnthropicContentBlock::ToolResult { .. } => {}
             }
         }
 
@@ -419,7 +421,7 @@ impl AnthropicClient {
             Some("end_turn") => FinishReason::Stop,
             Some("max_tokens") => FinishReason::Length,
             Some("tool_use") => FinishReason::ToolCalls,
-            _ => FinishReason::Stop,
+            Some(_) | None => FinishReason::Stop,
         };
 
         ChatCompletionResponse {
@@ -489,13 +491,13 @@ impl AnthropicClient {
             let auth = self
                 .auth
                 .lock()
-                .map_err(|e| format!("Lock poisoned: {}", e))?;
+                .map_err(|e| format!("Lock poisoned: {e}"))?;
             matches!(&*auth, AnthropicAuth::OAuth(_))
         };
 
         if is_oauth {
             request_builder = request_builder
-                .header("authorization", format!("Bearer {}", token))
+                .header("authorization", format!("Bearer {token}"))
                 .header(
                     "anthropic-beta",
                     "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14"
@@ -516,13 +518,13 @@ impl AnthropicClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Anthropic API error ({}): {}", status, error_text));
+            return Err(format!("Anthropic API error ({status}): {error_text}"));
         }
 
         let anthropic_response: AnthropicResponse = response
             .json()
             .await
-            .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
+            .map_err(|e| format!("Failed to parse Anthropic response: {e}"))?;
 
         Ok(Self::convert_anthropic_response_to_openai(
             anthropic_response,
@@ -564,13 +566,13 @@ impl AnthropicClient {
             let auth = self
                 .auth
                 .lock()
-                .map_err(|e| format!("Lock poisoned: {}", e))?;
+                .map_err(|e| format!("Lock poisoned: {e}"))?;
             matches!(&*auth, AnthropicAuth::OAuth(_))
         };
 
         if is_oauth {
             request_builder = request_builder
-                .header("authorization", format!("Bearer {}", token))
+                .header("authorization", format!("Bearer {token}"))
                 .header(
                     "anthropic-beta",
                     "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14"
@@ -597,13 +599,13 @@ impl AnthropicClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Anthropic API error ({}): {}", status, error_text));
+            return Err(format!("Anthropic API error ({status}): {error_text}"));
         }
 
         let stream = response.bytes_stream().eventsource().map(|event| {
             event
                 .map_err(|err| {
-                    eprintln!("stream: failed to read response: {:?}", err);
+                    eprintln!("stream: failed to read response: {err:?}");
                     ApiStreamError::Unknown("Failed to read response".to_string())
                 })
                 .and_then(|event| {
@@ -620,8 +622,7 @@ impl AnthropicClient {
     ) -> Result<ChatCompletionStreamResponse, ApiStreamError> {
         match event_type {
             "error" => Err(ApiStreamError::Unknown(format!(
-                "Anthropic error: {}",
-                data
+                "Anthropic error: {data}"
             ))),
             "message_start" | "ping" => {
                 // Skip these events, return a minimal delta
@@ -682,7 +683,7 @@ impl AnthropicClient {
                     Some("end_turn") => Some(FinishReason::Stop),
                     Some("max_tokens") => Some(FinishReason::Length),
                     Some("tool_use") => Some(FinishReason::ToolCalls),
-                    _ => None,
+                    Some(_) | None => None,
                 };
 
                 Ok(ChatCompletionStreamResponse {
@@ -703,11 +704,12 @@ impl AnthropicClient {
                         finish_reason,
                     }],
                     usage: event.get("usage").and_then(|u| {
+                        let input_tokens = u.get("input_tokens")?.as_u64()?.min(u32::MAX as u64) as u32;
+                        let output_tokens = u.get("output_tokens")?.as_u64()?.min(u32::MAX as u64) as u32;
                         Some(Usage {
-                            prompt_tokens: u.get("input_tokens")?.as_u64()? as u32,
-                            completion_tokens: u.get("output_tokens")?.as_u64()? as u32,
-                            total_tokens: (u.get("input_tokens")?.as_u64()? as u32)
-                                + (u.get("output_tokens")?.as_u64()? as u32),
+                            prompt_tokens: input_tokens,
+                            completion_tokens: output_tokens,
+                            total_tokens: input_tokens + output_tokens,
                             prompt_tokens_details: None,
                         })
                     }),
