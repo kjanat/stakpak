@@ -23,7 +23,7 @@ chrono = { workspace = true }
 rmcp = { workspace = true }
 reqwest = { workspace = true }
 rustls-platform-verifier = { workspace = true }
-russh = { version = "0.53.0" }
+russh = { version = "0.54.1" }
 russh-sftp = { version = "2.1.1" }
 dirs = "5.0"
 async-trait = { workspace = true }
