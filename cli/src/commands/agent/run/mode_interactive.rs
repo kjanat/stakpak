@@ -57,6 +57,30 @@ pub struct RunInteractiveConfig {
     pub model: AgentModel,
 }
 
+/// Derives the authentication type label based on the active provider.
+/// Returns a label like "OAuth", "API Key (Stakpak)", "API Key (Anthropic)", or "Unknown".
+fn get_auth_type_for_provider(ctx: &AppConfig, provider_name: &str) -> String {
+    match provider_name {
+        "Stakpak" => {
+            if ctx.api_key.is_some() {
+                "API Key (Stakpak)".to_string()
+            } else {
+                "Unknown".to_string()
+            }
+        }
+        "Anthropic" => {
+            if ctx.anthropic_oauth.is_some() {
+                "OAuth".to_string()
+            } else if ctx.anthropic_api_key.is_some() {
+                "API Key (Anthropic)".to_string()
+            } else {
+                "Unknown".to_string()
+            }
+        }
+        _ => "Unknown".to_string(),
+    }
+}
+
 pub async fn run_interactive(
     mut ctx: AppConfig,
     mut config: RunInteractiveConfig,
@@ -192,15 +216,7 @@ pub async fn run_interactive(
 
             // Send provider information
             let provider_name = client.get_provider_display_name();
-            let auth_type = if ctx_for_client.anthropic_oauth.is_some() {
-                "OAuth".to_string()
-            } else if ctx_for_client.anthropic_api_key.is_some() {
-                "API Key (Anthropic)".to_string()
-            } else if ctx_for_client.api_key.is_some() {
-                "API Key (Stakpak)".to_string()
-            } else {
-                "Unknown".to_string()
-            };
+            let auth_type = get_auth_type_for_provider(&ctx_for_client, &provider_name);
             send_input_event(
                 &input_tx,
                 InputEvent::SetProviderInfo(provider_name, auth_type),
@@ -788,15 +804,7 @@ pub async fn run_interactive(
 
                         // Send provider info to TUI
                         let provider_name = new_client.get_provider_display_name();
-                        let auth_type = if updated_config.anthropic_oauth.is_some() {
-                            "OAuth".to_string()
-                        } else if updated_config.anthropic_api_key.is_some() {
-                            "API Key (Anthropic)".to_string()
-                        } else if updated_config.api_key.is_some() {
-                            "API Key (Stakpak)".to_string()
-                        } else {
-                            "Unknown".to_string()
-                        };
+                        let auth_type = get_auth_type_for_provider(&updated_config, &provider_name);
                         send_input_event(
                             &input_tx,
                             InputEvent::SetProviderInfo(provider_name, auth_type),
