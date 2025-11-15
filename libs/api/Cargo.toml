@@ -2,6 +2,12 @@
 name = "stakpak-api"
 version = { workspace = true }
 edition = "2024"
+description = "API client library for Stakpak Agent with Anthropic Claude Code and OpenAI support"
+license = "Apache-2.0"
+repository = "https://github.com/kjanat/stakpak"
+readme = "../../README.md"
+keywords = ["api", "anthropic", "claude", "openai", "client"]
+categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
 stakpak-shared = { path = "../../libs/shared" }

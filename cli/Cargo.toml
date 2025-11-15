@@ -2,6 +2,12 @@
 name = "stakpak"
 version = { workspace = true }
 edition = "2024"
+description = "Security-hardened AI agent for DevOps and operations with mTLS encryption and privacy features"
+license = "Apache-2.0"
+repository = "https://github.com/kjanat/stakpak"
+readme = "../README.md"
+keywords = ["ai-agent", "devops", "security", "mtls", "automation"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 stakpak-api = { path = "../libs/api" }
