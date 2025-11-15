@@ -1169,3 +1169,114 @@ https://stakpak.dev/{}/agent-sessions/{}",
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_config() -> AppConfig {
+        AppConfig {
+            api_key: None,
+            anthropic_api_key: None,
+            anthropic_oauth: None,
+            provider: None,
+            api_endpoint: "https://api.stakpak.dev".to_string(),
+            profile_name: "default".to_string(),
+            config_path: "/tmp/config.toml".to_string(),
+            machine_name: None,
+            auto_append_gitignore: None,
+            allowed_tools: None,
+            auto_approve: None,
+            rulebooks: None,
+            mcp_server_host: None,
+            warden: None,
+        }
+    }
+
+    fn create_test_oauth() -> crate::config::AnthropicOAuth {
+        crate::config::AnthropicOAuth {
+            refresh_token: "test-refresh-token".to_string(),
+            access_token: "test-access-token".to_string(),
+            expires: 1234567890,
+        }
+    }
+
+    #[test]
+    fn test_get_auth_type_stakpak_with_api_key() {
+        let mut config = create_test_config();
+        config.api_key = Some("test-stakpak-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "Stakpak");
+        assert_eq!(auth_type, "API Key (Stakpak)");
+    }
+
+    #[test]
+    fn test_get_auth_type_stakpak_without_api_key() {
+        let config = create_test_config();
+
+        let auth_type = get_auth_type_for_provider(&config, "Stakpak");
+        assert_eq!(auth_type, "Unknown");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_with_oauth() {
+        let mut config = create_test_config();
+        config.anthropic_oauth = Some(create_test_oauth());
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "OAuth");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_with_api_key() {
+        let mut config = create_test_config();
+        config.anthropic_api_key = Some("test-anthropic-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "API Key (Anthropic)");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_oauth_takes_precedence() {
+        let mut config = create_test_config();
+        config.anthropic_oauth = Some(create_test_oauth());
+        config.anthropic_api_key = Some("test-anthropic-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "OAuth");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_without_credentials() {
+        let config = create_test_config();
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "Unknown");
+    }
+
+    #[test]
+    fn test_get_auth_type_derives_from_active_provider_not_available_creds() {
+        // This is the key test case: when both Stakpak and Anthropic creds exist,
+        // the auth type should match the active provider
+        let mut config = create_test_config();
+        config.api_key = Some("test-stakpak-key".to_string());
+        config.anthropic_oauth = Some(create_test_oauth());
+
+        // When Stakpak is active, should show Stakpak auth
+        let auth_type = get_auth_type_for_provider(&config, "Stakpak");
+        assert_eq!(auth_type, "API Key (Stakpak)");
+
+        // When Anthropic is active, should show Anthropic auth
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "OAuth");
+    }
+
+    #[test]
+    fn test_get_auth_type_unknown_provider() {
+        let mut config = create_test_config();
+        config.api_key = Some("test-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "UnknownProvider");
+        assert_eq!(auth_type, "Unknown");
+    }
+}
