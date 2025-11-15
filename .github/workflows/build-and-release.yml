@@ -202,7 +202,7 @@ jobs:
             desc "Stakpak CLI tool"
             homepage "https://github.com/${{ github.repository }}"
             version "${VERSION}"
-            
+
             on_macos do
               if Hardware::CPU.arm?
                 url "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/stakpak-darwin-aarch64.tar.gz"
@@ -212,7 +212,7 @@ jobs:
                 sha256 "${SHA256_DARWIN_X64}"
               end
             end
-            
+
             on_linux do
               if Hardware::CPU.arm?
                 url "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/stakpak-linux-aarch64.tar.gz"
@@ -222,7 +222,7 @@ jobs:
                 sha256 "${SHA256_LINUX_X64}"
               end
             end
-            
+
             def install
               bin.install "stakpak"
             end

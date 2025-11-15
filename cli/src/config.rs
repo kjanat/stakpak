@@ -128,10 +128,10 @@ impl From<AppConfig> for ClientConfig {
                     expires: oauth.expires,
                 });
 
-        ClientConfig {
+        Self {
             api_key: config.api_key.clone(),
             api_endpoint: config.api_endpoint.clone(),
-            anthropic_api_key: config.anthropic_api_key.clone(),
+            anthropic_api_key: config.anthropic_api_key,
             anthropic_oauth,
             provider,
         }
@@ -140,17 +140,17 @@ impl From<AppConfig> for ClientConfig {
 
 impl From<OldAppConfig> for ProfileConfig {
     fn from(old_config: OldAppConfig) -> Self {
-        ProfileConfig {
+        Self {
             api_endpoint: Some(old_config.api_endpoint),
             api_key: old_config.api_key,
-            ..ProfileConfig::default()
+            ..Self::default()
         }
     }
 }
 
 impl From<OldAppConfig> for Settings {
     fn from(old_config: OldAppConfig) -> Self {
-        Settings {
+        Self {
             machine_name: old_config.machine_name,
             auto_append_gitignore: old_config.auto_append_gitignore,
         }
@@ -160,7 +160,7 @@ impl From<OldAppConfig> for Settings {
 impl From<OldAppConfig> for ConfigFile {
     // OldAppConfigConfig will always create a 'default' ConfigFile
     fn from(old_config: OldAppConfig) -> Self {
-        ConfigFile {
+        Self {
             profiles: HashMap::from([("default".to_string(), old_config.clone().into())]),
             settings: old_config.into(),
         }
@@ -169,7 +169,7 @@ impl From<OldAppConfig> for ConfigFile {
 
 impl Default for ConfigFile {
     fn default() -> Self {
-        ConfigFile {
+        Self {
             profiles: HashMap::from([(
                 "default".into(),
                 ProfileConfig::with_api_endpoint(STAKPAK_API_ENDPOINT),
@@ -205,9 +205,9 @@ fn create_readonly_profile(default_profile: Option<&ProfileConfig>) -> ProfileCo
 
 impl ProfileConfig {
     fn with_api_endpoint(api_endpoint: &str) -> Self {
-        ProfileConfig {
+        Self {
             api_endpoint: Some(api_endpoint.into()),
-            ..ProfileConfig::default()
+            ..Self::default()
         }
     }
 }
@@ -233,11 +233,11 @@ impl AppConfig {
 
         toml::to_string_pretty(&config_file)
             .map_err(|e| {
-                ConfigError::Message(format!("Failed to serialize migrated config: {}", e))
+                ConfigError::Message(format!("Failed to serialize migrated config: {e}"))
             })
             .and_then(|config_str| {
                 write(config_path, config_str).map_err(|e| {
-                    ConfigError::Message(format!("Failed to save migrated config: {}", e))
+                    ConfigError::Message(format!("Failed to save migrated config: {e}"))
                 })
             })?;
 
@@ -250,8 +250,7 @@ impl AppConfig {
                 .or_else(|_| Self::migrate_old_config(config_path, &content)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(ConfigFile::default()),
             Err(e) => Err(ConfigError::Message(format!(
-                "Failed to read config file: {}",
-                e
+                "Failed to read config file: {e}"
             ))),
         }
     }
@@ -286,8 +285,7 @@ impl AppConfig {
             .cloned()
             .ok_or_else(|| {
                 ConfigError::Message(format!(
-                    "Profile '{}' not found in configuration",
-                    profile_name
+                    "Profile '{profile_name}' not found in configuration"
                 ))
             })?;
 
@@ -340,7 +338,7 @@ impl AppConfig {
             .or(anthropic_api_key);
         let api_endpoint = std::env::var("STAKPAK_API_ENDPOINT").unwrap_or(api_endpoint);
 
-        let app_config = AppConfig {
+        let app_config = Self {
             api_endpoint,
             api_key,
             anthropic_api_key,
@@ -360,7 +358,7 @@ impl AppConfig {
         if is_config_file_dirty {
             // fail without crashing, because it's not critical
             if let Err(e) = app_config.save() {
-                eprintln!("Warning: Failed to update config on load: {}", e);
+                eprintln!("Warning: Failed to update config on load: {e}");
             }
         }
 
@@ -378,10 +376,10 @@ impl AppConfig {
         }
 
         let content = std::fs::read_to_string(&config_path)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
+            .map_err(|e| format!("Failed to read config file: {e}"))?;
 
         let config_file: ConfigFile =
-            toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {}", e))?;
+            toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))?;
 
         let mut profiles: Vec<String> = config_file
             .profiles
@@ -406,26 +404,26 @@ impl AppConfig {
     ) -> Result<(), String> {
         // Load the config file
         let mut config_file = Self::load_config_file(config_path)
-            .map_err(|e| format!("Failed to load config: {}", e))?;
+            .map_err(|e| format!("Failed to load config: {e}"))?;
 
         // Update the profile's provider field
         if let Some(profile) = config_file.profiles.get_mut(profile_name) {
             profile.provider = provider;
         } else {
-            return Err(format!("Profile '{}' not found", profile_name));
+            return Err(format!("Profile '{profile_name}' not found"));
         }
 
         // Save the updated config
         let config_str = toml::to_string_pretty(&config_file)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+            .map_err(|e| format!("Failed to serialize config: {e}"))?;
 
         // Ensure parent directory exists
         if let Some(parent) = Path::new(config_path).parent() {
             create_dir_all(parent)
-                .map_err(|e| format!("Failed to create config directory: {}", e))?;
+                .map_err(|e| format!("Failed to create config directory: {e}"))?;
         }
 
-        write(config_path, config_str).map_err(|e| format!("Failed to save config: {}", e))?;
+        write(config_path, config_str).map_err(|e| format!("Failed to save config: {e}"))?;
 
         Ok(())
     }
@@ -445,13 +443,12 @@ impl AppConfig {
         Ok(ProfileInfo {
             name: profile_name.to_string(),
             has_api_key: has_any_credentials,
-            allowed_tools_count: config.allowed_tools.as_ref().map(|t| t.len()).unwrap_or(0),
-            auto_approve_count: config.auto_approve.as_ref().map(|t| t.len()).unwrap_or(0),
+            allowed_tools_count: config.allowed_tools.as_ref().map_or(0, std::vec::Vec::len),
+            auto_approve_count: config.auto_approve.as_ref().map_or(0, std::vec::Vec::len),
             is_restricted: config
                 .allowed_tools
                 .as_ref()
-                .map(|t| t.len() < 5)
-                .unwrap_or(false),
+                .is_some_and(|t| t.len() < 5),
         })
     }
 
@@ -459,9 +456,9 @@ impl AppConfig {
         // Load existing config or create new one
         let mut config_file = if Path::new(&self.config_path).exists() {
             let content = std::fs::read_to_string(&self.config_path)
-                .map_err(|e| format!("Failed to read config file: {}", e))?;
+                .map_err(|e| format!("Failed to read config file: {e}"))?;
             toml::from_str::<ConfigFile>(&content)
-                .map_err(|e| format!("Failed to parse config file: {}", e))?
+                .map_err(|e| format!("Failed to parse config file: {e}"))?
         } else {
             ConfigFile {
                 profiles: HashMap::new(),
@@ -495,11 +492,11 @@ impl AppConfig {
         };
 
         if let Some(parent) = Path::new(&self.config_path).parent() {
-            create_dir_all(parent).map_err(|e| format!("{}", e))?;
+            create_dir_all(parent).map_err(|e| format!("{e}"))?;
         }
 
-        let config_str = toml::to_string_pretty(&config_file).map_err(|e| format!("{}", e))?;
-        write(&self.config_path, config_str).map_err(|e| format!("{}", e))
+        let config_str = toml::to_string_pretty(&config_file).map_err(|e| format!("{e}"))?;
+        write(&self.config_path, config_str).map_err(|e| format!("{e}"))
     }
 }
 

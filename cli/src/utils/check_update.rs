@@ -35,12 +35,11 @@ pub async fn check_update(current_version: &str) -> Result<(), Box<dyn Error>> {
         );
         println!("\x1b[1;34m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\x1b[0m");
         println!(
-            "\x1b[1;37m \x1b[1;33m{}\x1b[0m → \x1b[1;32m{}\x1b[0m",
-            current_version, release
+            "\x1b[1;37m \x1b[1;33m{current_version}\x1b[0m → \x1b[1;32m{release}\x1b[0m"
         );
-        println!("\x1b[1;35m{}\x1b[0m", sep);
+        println!("\x1b[1;35m{sep}\x1b[0m");
         println!("\x1b[1;37m Upgrade to access the latest features! 🚀\x1b[0m");
-        println!("\x1b[1;35m{}\x1b[0m", sep);
+        println!("\x1b[1;35m{sep}\x1b[0m");
     }
 
     Ok(())
@@ -69,20 +68,19 @@ pub async fn auto_update() -> Result<(), Box<dyn Error>> {
     let current_version = format!("v{}", env!("CARGO_PKG_VERSION"));
     if current_version != latest_version {
         println!(
-            "\n🚀 Update available!  \x1b[1;37m\x1b[1;33m{}\x1b[0m → \x1b[1;32m{}\x1b[0m ✨\n",
-            current_version, latest_version
+            "\n🚀 Update available!  \x1b[1;37m\x1b[1;33m{current_version}\x1b[0m → \x1b[1;32m{latest_version}\x1b[0m ✨\n"
         );
         println!("Would you like to update? (y/n)");
         let mut input = String::new();
         if let Err(e) = std::io::stdin().read_line(&mut input) {
-            eprintln!("Failed to read input: {}", e);
+            eprintln!("Failed to read input: {e}");
             return Ok(());
         }
         if input.trim() == "y" || input.trim().is_empty() {
             run_auto_update().await?;
         } else if input.trim() == "n" {
             println!("Update cancelled!");
-            println!("Proceeding to open Stakpak Agent...")
+            println!("Proceeding to open Stakpak Agent...");
         } else {
             println!("Invalid input! Please enter y or n.");
         }

@@ -36,7 +36,7 @@ pub fn convert_tools_map_with_filter(
         .collect()
 }
 
-pub fn user_message(user_input: String) -> ChatMessage {
+pub const fn user_message(user_input: String) -> ChatMessage {
     ChatMessage {
         role: Role::User,
         content: Some(MessageContent::String(user_input)),
@@ -46,7 +46,7 @@ pub fn user_message(user_input: String) -> ChatMessage {
     }
 }
 
-pub fn system_message(system_prompt: String) -> ChatMessage {
+pub const fn system_message(system_prompt: String) -> ChatMessage {
     ChatMessage {
         role: Role::System,
         content: Some(MessageContent::String(system_prompt)),
@@ -56,7 +56,7 @@ pub fn system_message(system_prompt: String) -> ChatMessage {
     }
 }
 
-pub fn tool_result(tool_call_id: String, result: String) -> ChatMessage {
+pub const fn tool_result(tool_call_id: String, result: String) -> ChatMessage {
     ChatMessage {
         role: Role::Tool,
         content: Some(MessageContent::String(result)),
@@ -83,8 +83,7 @@ pub async fn add_local_context<'a>(
         if is_first_message || force_add {
             let context_display = local_context.format_display().await?;
             let formatted_input = format!(
-                "{}\n\n<local_context>\n{}\n</local_context>",
-                user_input, context_display
+                "{user_input}\n\n<local_context>\n{context_display}\n</local_context>"
             );
             Ok((formatted_input, Some(local_context)))
         } else {
@@ -110,7 +109,9 @@ pub fn add_rulebooks_with_force(
     force_add: bool,
 ) -> (String, Option<String>) {
     if let Some(rulebooks) = rulebooks {
-        let rulebooks_text = if !rulebooks.is_empty() {
+        let rulebooks_text = if rulebooks.is_empty() {
+            "# No Rule Books Available".to_string()
+        } else {
             format!(
                 "\n\n# My Rule Books:\n\n{}",
                 rulebooks
@@ -120,9 +121,9 @@ pub fn add_rulebooks_with_force(
                         let mut lines = text.lines();
                         let mut result = String::new();
                         if let Some(first) = lines.next() {
-                            result.push_str(&format!("  - {}", first));
+                            result.push_str(&format!("  - {first}"));
                             for line in lines {
-                                result.push_str(&format!("\n    {}", line));
+                                result.push_str(&format!("\n    {line}"));
                             }
                         }
                         result
@@ -130,15 +131,12 @@ pub fn add_rulebooks_with_force(
                     .collect::<Vec<String>>()
                     .join("\n")
             )
-        } else {
-            "# No Rule Books Available".to_string()
         };
 
         // Add rulebooks only if explicitly requested via force_add
         if force_add {
             let formatted_input = format!(
-                "{}\n\n<rulebooks>\n{}\n</rulebooks>",
-                user_input, rulebooks_text
+                "{user_input}\n\n<rulebooks>\n{rulebooks_text}\n</rulebooks>"
             );
             (formatted_input, Some(rulebooks_text))
         } else {
@@ -159,8 +157,7 @@ pub fn add_subagents(
 
         if messages.is_empty() {
             let formatted_input = format!(
-                "{}\n\n<subagents>\n{}\n</subagents>",
-                user_input, subagents_text
+                "{user_input}\n\n<subagents>\n{subagents_text}\n</subagents>"
             );
             (formatted_input, Some(subagents_text))
         } else {
@@ -194,9 +191,9 @@ pub fn tool_call_history_string(tool_calls: &[ToolCallResult]) -> Option<String>
             } else {
                 tc.result.clone()
             };
-            format!("```shell\n$ {}\n{}\n```", command, output)
+            format!("```shell\n$ {command}\n{output}\n```")
         })
         .collect::<Vec<_>>()
         .join("\n");
-    Some(format!("Here's my shell history:\n{}", history))
+    Some(format!("Here's my shell history:\n{history}"))
 }

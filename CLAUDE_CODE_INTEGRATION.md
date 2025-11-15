@@ -137,16 +137,16 @@ When using Anthropic mode, these features will show helpful error messages if ac
 ```toml
 [profiles.myprofile]
 # Stakpak API configuration
-api_endpoint = "https://apiv2.stakpak.dev"  # Optional, defaults to official endpoint
-api_key = "stkpk_api_..."                    # Your Stakpak API key
+api_endpoint = "https://apiv2.stakpak.dev" # Optional, defaults to official endpoint
+api_key = "stkpk_api_..." # Your Stakpak API key
 
 # Anthropic/Claude Code configuration
-anthropic_api_key = "sk-ant-api03-..."       # Your Anthropic API key
-provider = "anthropic"                        # Force provider: "anthropic" or "stakpak"
+anthropic_api_key = "sk-ant-api03-..." # Your Anthropic API key
+provider = "anthropic" # Force provider: "anthropic" or "stakpak"
 
 # Tool restrictions
-allowed_tools = ["view", "run_command"]      # Limit which tools can be used
-auto_approve = ["view"]                      # Auto-approve these tools
+allowed_tools = ["view", "run_command"] # Limit which tools can be used
+auto_approve = ["view"] # Auto-approve these tools
 
 # Rulebooks (Stakpak only)
 [profiles.myprofile.rulebooks]
@@ -158,24 +158,25 @@ include_tags = ["production"]
 enabled = true
 volumes = [
   "~/.stakpak/config.toml:/config:ro",
-  "./:/agent:ro"
+  "./:/agent:ro",
 ]
 ```
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (overrides config) |
-| `STAKPAK_API_KEY` | Stakpak API key (overrides config) |
-| `STAKPAK_API_ENDPOINT` | Custom Stakpak endpoint |
-| `STAKPAK_PROFILE` | Profile to use (default: "default") |
+| Variable               | Description                          |
+| ---------------------- | ------------------------------------ |
+| `ANTHROPIC_API_KEY`    | Anthropic API key (overrides config) |
+| `STAKPAK_API_KEY`      | Stakpak API key (overrides config)   |
+| `STAKPAK_API_ENDPOINT` | Custom Stakpak endpoint              |
+| `STAKPAK_PROFILE`      | Profile to use (default: "default")  |
 
 ## Authentication Methods
 
 ### Method 1: Claude Pro/Max OAuth (FREE API Access!)
 
 **Benefits:**
+
 - ✅ Free API usage included with your Claude Pro/Max subscription
 - ✅ No per-token charges
 - ✅ Same models as API (Claude Sonnet 4, Haiku 4)
@@ -205,6 +206,7 @@ stakpak auth logout anthropic
 ### Method 2: Anthropic API Key (Pay-per-use)
 
 **When to use:**
+
 - You don't have Claude Pro/Max subscription
 - You need programmatic API access
 - You're building commercial applications
@@ -232,6 +234,7 @@ provider = "anthropic"
 ### Method 3: Stakpak Backend
 
 **When to use:**
+
 - You want access to rulebooks and enterprise features
 - You need session tracking and analytics
 - You want semantic code search for infrastructure
@@ -319,6 +322,7 @@ This means you can seamlessly switch between providers without changing your con
 **FREE!** 🎉
 
 When you login with `stakpak auth login anthropic` using your Claude Pro or Max subscription:
+
 - ✅ **$0 per API call** - Included in your subscription
 - ✅ All models available (Sonnet 4, Haiku 4)
 - ✅ Same quality as paid API
@@ -349,16 +353,19 @@ Stakpak offers competitive pricing with additional features:
 You need to either login with OAuth or set an API key:
 
 **Option 1: OAuth (FREE with Claude Pro/Max):**
+
 ```bash
 stakpak auth login anthropic
 ```
 
 **Option 2: API Key:**
+
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 Or add it to your profile:
+
 ```toml
 [profiles.default]
 anthropic_api_key = "sk-ant-..."
@@ -376,6 +383,7 @@ stakpak auth login anthropic
 ### Authorization code format error
 
 When pasting the authorization code, make sure to include both parts:
+
 - Format: `<code>#<state>`
 - Example: `abc123def456#xyz789`
 
@@ -387,9 +395,9 @@ Some features (rulebooks, sessions, code indexing) require the Stakpak backend. 
 
 ```toml
 [profiles.hybrid]
-api_key = "stkpk_api_..."           # For Stakpak features
-anthropic_api_key = "sk-ant-..."    # For LLM calls
-provider = "anthropic"               # Use Anthropic for inference
+api_key = "stkpk_api_..." # For Stakpak features
+anthropic_api_key = "sk-ant-..." # For LLM calls
+provider = "anthropic" # Use Anthropic for inference
 ```
 
 ### Switching profiles

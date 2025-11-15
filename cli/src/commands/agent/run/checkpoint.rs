@@ -15,15 +15,13 @@ pub async fn get_checkpoint_messages(
 ) -> Result<Vec<ChatMessage>, String> {
     let checkpoint_uuid = Uuid::parse_str(checkpoint_id).map_err(|_| {
         format!(
-            "Invalid checkpoint ID '{}' - must be a valid UUID",
-            checkpoint_id
+            "Invalid checkpoint ID '{checkpoint_id}' - must be a valid UUID"
         )
     })?;
 
     let checkpoint = client
         .get_agent_checkpoint(checkpoint_uuid)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let checkpoint_output: AgentOutput = checkpoint.output;
 
     Ok(get_messages_from_checkpoint_output(&checkpoint_output))
@@ -129,7 +127,7 @@ pub async fn extract_checkpoint_messages_and_tool_calls(
 
     Ok((
         checkpoint_messages.clone(),
-        tool_calls.map(|t| t.to_vec()).unwrap_or_default(),
+        tool_calls.cloned().unwrap_or_default(),
     ))
 }
 

@@ -1,13 +1,13 @@
 [package]
 name = "stakpak-api"
 version = { workspace = true }
+categories = ["api-bindings", "asynchronous"]
 edition = "2024"
-description = "API client library for Stakpak Agent with Anthropic Claude Code and OpenAI support"
+keywords = ["anthropic", "api", "claude", "client", "openai"]
+license = "Apache-2.0"
 readme = "../../README.md"
 repository = "https://github.com/kjanat/stakpak"
-license = "Apache-2.0"
-keywords = ["anthropic", "api", "claude", "client", "openai"]
-categories = ["api-bindings", "asynchronous"]
+description = "API client library for Stakpak Agent with Anthropic Claude Code and OpenAI support"
 
 [dependencies]
 chrono = { workspace = true }

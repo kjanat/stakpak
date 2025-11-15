@@ -74,6 +74,7 @@ let config = PopupConfig::new()
 ```
 
 In this example:
+
 - **Lines 1-8**: Tool details (Tool, Path, Status) and "Content:" header - **FIXED**
 - **Lines 9+**: Tool arguments and other content - **SCROLLABLE**
 

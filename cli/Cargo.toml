@@ -1,13 +1,13 @@
 [package]
 name = "stakpak"
 version = { workspace = true }
+categories = ["command-line-utilities", "development-tools"]
 edition = "2024"
-description = "Security-hardened AI agent for DevOps and operations with mTLS encryption and privacy features"
+keywords = ["ai-agent", "automation", "devops", "mtls", "security"]
+license = "Apache-2.0"
 readme = "../README.md"
 repository = "https://github.com/kjanat/stakpak"
-license = "Apache-2.0"
-keywords = ["ai-agent", "automation", "devops", "mtls", "security"]
-categories = ["command-line-utilities", "development-tools"]
+description = "Security-hardened AI agent for DevOps and operations with mTLS encryption and privacy features"
 
 [dependencies]
 # ACP dependencies

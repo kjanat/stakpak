@@ -1,10 +1,10 @@
-# Windows Testing Report for Stakpak 
+# Windows Testing Report for Stakpak
 
-**Date:** October 29, 2025  
-**Tester:** Community Contributor  
-**Platform:** Windows 11 (Build 26200)  
-**Architecture:** x86_64  
-**Version Tested:** Stakpak v0.2.65  
+**Date:** October 29, 2025\
+**Tester:** Community Contributor\
+**Platform:** Windows 11 (Build 26200)\
+**Architecture:** x86_64\
+**Version Tested:** Stakpak v0.2.65\
 **Status:** ✅ Production Ready
 
 ---
@@ -34,6 +34,7 @@ Stakpak has been comprehensively tested on Windows 11 and demonstrates **full co
 ## System Information
 
 ### Windows Environment
+
 ```
 Operating System: Windows 11
 Build Number: 10.0.26200
@@ -42,6 +43,7 @@ System Type: Standard Workstation
 ```
 
 ### Development Environment
+
 ```
 PowerShell Version: 5.1.26100.6899 (Windows PowerShell)
 Command Prompt: Windows 10/11 standard
@@ -49,6 +51,7 @@ Windows Terminal: Available (Windows 11)
 ```
 
 ### Virtualization & Containerization
+
 ```
 WSL2 Version: 2.4.13.0
 Linux Kernel Version: 5.15.167.4-1
@@ -56,6 +59,7 @@ Docker Version: 28.5.1 (build e180ab8)
 ```
 
 ### Security Software
+
 ```
 Windows Defender: ✅ Enabled
 Real-Time Protection: ✅ Active
@@ -68,6 +72,7 @@ False Positives on Stakpak: ❌ None
 ## Installation & Setup
 
 ### Binary Information
+
 - **Source:** GitHub Releases (https://github.com/stakpak/agent/releases)
 - **File:** stakpak-windows-x86_64.zip
 - **Version:** v0.2.65
@@ -78,6 +83,7 @@ False Positives on Stakpak: ❌ None
 ### Installation Process
 
 **Step 1: Download & Extract**
+
 ```
 ✅ Downloaded stakpak-windows-x86_64.zip
 ✅ Extracted to: Downloads\stakpak
@@ -86,6 +92,7 @@ False Positives on Stakpak: ❌ None
 ```
 
 **Step 2: Configuration & Authentication**
+
 ```
 ✅ API key created from Stakpak console
 ✅ Login successful with: stakpak.exe login --api-key <KEY>
@@ -97,11 +104,13 @@ False Positives on Stakpak: ❌ None
 **Step 3: Verification**
 
 Command:
+
 ```powershell
 stakpak.exe version
 ```
 
 Output:
+
 ```
 stakpak v0.2.65 (https://github.com/stakpak/agent)
 ```
@@ -111,11 +120,13 @@ Status: ✅ SUCCESS
 **Step 4: Account Verification**
 
 Command:
+
 ```powershell
 stakpak.exe account
 ```
 
 Output:
+
 ```
 ID: e0d64fbc-b49f-11f0-a6e9-e735db5a2de6
 Username: <community_user>
@@ -125,6 +136,7 @@ Name: User Account
 Status: ✅ Successfully authenticated
 
 ### Configuration File
+
 ```toml
 [profiles.default]
 api_endpoint = "https://apiv2.stakpak.dev"
@@ -144,11 +156,13 @@ auto_append_gitignore = true
 ### Help Command
 
 Command:
+
 ```powershell
 stakpak.exe -h
 ```
 
 Output:
+
 ```
 Stakpak CLI tool
 
@@ -174,11 +188,13 @@ Status: ✅ All commands listed and accessible
 ### Configuration Management
 
 Command:
+
 ```powershell
 stakpak.exe config show
 ```
 
 Output:
+
 ```
 Current configuration:
   Profile: default
@@ -193,11 +209,13 @@ Status: ✅ Configuration properly masked and accessible
 ### Agent Functionality
 
 Command:
+
 ```powershell
 stakpak.exe --print "What is the project structure?"
 ```
 
 Output:
+
 ```
 ┌─ Final Agent Response ──────────────────────────────────────────────────────────
 │ Looking at the project structure...
@@ -227,11 +245,13 @@ Status: ✅ Agent successfully analyzes projects and returns formatted results
 ### Rulebooks Access
 
 Command:
+
 ```powershell
 stakpak.exe rulebooks get
 ```
 
 Output (partial - 9 total):
+
 ```
 Rulebooks:
   - URI: stakpak://stakpak.dev/V1/documentation-rulebook.md
@@ -263,6 +283,7 @@ Status: ✅ Rulebooks system fully functional and accessible
 **Environment:** Windows PowerShell 5.1.26100.6899
 
 Tests Performed:
+
 ```
 ✅ stakpak.exe -h           → Full help displayed
 ✅ stakpak.exe version      → Version info shown
@@ -280,11 +301,13 @@ Status: ✅ **FULLY COMPATIBLE** - All features work perfectly in PowerShell
 **Environment:** Windows Command Prompt
 
 Command:
+
 ```
 stakpak.exe version
 ```
 
 Output:
+
 ```
 stakpak v0.2.65 (https://github.com/stakpak/agent)
 ```
@@ -296,6 +319,7 @@ Status: ✅ **FULLY COMPATIBLE** - CMD execution successful
 **Environment:** Windows Terminal (PowerShell profile)
 
 Tests Performed:
+
 ```
 ✅ Multiple tabs with different shells
 ✅ PowerShell shell execution
@@ -306,6 +330,7 @@ Tests Performed:
 Status: ✅ **FULLY COMPATIBLE** - Windows Terminal works perfectly
 
 **Terminal Summary:**
+
 ```
 PowerShell 5.1 ............ ✅ Excellent
 Command Prompt ........... ✅ Excellent
@@ -320,11 +345,13 @@ Overall Terminal Support . ✅ Excellent
 ### Windows-Style Paths (Backslashes)
 
 Command:
+
 ```powershell
 stakpak.exe --workdir "C:\Users\user\Desktop" version
 ```
 
 Output:
+
 ```
 stakpak v0.2.65 (https://github.com/stakpak/agent)
 ```
@@ -334,11 +361,13 @@ Status: ✅ Windows paths fully supported
 ### Unix-Style Paths (Forward Slashes)
 
 Command:
+
 ```powershell
 stakpak.exe --workdir "C:/Users/user/Desktop" version
 ```
 
 Output:
+
 ```
 stakpak v0.2.65 (https://github.com/stakpak/agent)
 ```
@@ -348,11 +377,13 @@ Status: ✅ Unix-style paths fully supported
 ### Relative Paths
 
 Command:
+
 ```powershell
 stakpak.exe --workdir ".." version
 ```
 
 Output:
+
 ```
 stakpak v0.2.65 (https://github.com/stakpak/agent)
 ```
@@ -360,6 +391,7 @@ stakpak v0.2.65 (https://github.com/stakpak/agent)
 Status: ✅ Relative paths fully supported
 
 **Path Handling Summary:**
+
 ```
 Windows Backslash Paths ... ✅ Working
 Unix Forward Slash Paths .. ✅ Working
@@ -375,6 +407,7 @@ Overall Path Support ..... ✅ Excellent cross-platform compatibility
 ### Windows Defender Compatibility
 
 Configuration:
+
 ```
 Status: ✅ Enabled
 Real-Time Protection: ✅ Active
@@ -382,6 +415,7 @@ Scan Result: ✅ No threats detected
 ```
 
 Stakpak Binary Test:
+
 ```
 Download: ✅ No warnings
 Extraction: ✅ No warnings
@@ -390,6 +424,7 @@ False Positives: ❌ None
 ```
 
 SmartScreen:
+
 ```
 Status: ✅ No warnings
 UAC Prompts: ❌ None required
@@ -401,11 +436,13 @@ Result: ✅ **FULLY COMPATIBLE** - No security conflicts
 ### mTLS Features
 
 Command:
+
 ```powershell
 stakpak.exe mcp --help
 ```
 
 Output:
+
 ```
 Start the MCP server
 
@@ -428,6 +465,7 @@ Status: ✅ mTLS enabled by default, optional disable with warnings
 Configuration File: `%USERPROFILE%\.stakpak\config.toml`
 
 API Key Storage:
+
 ```
 Stored securely: ✅ Yes
 Masked in output: ✅ Yes
@@ -436,6 +474,7 @@ Protected by system: ✅ Yes
 ```
 
 Output Example:
+
 ```
 Current configuration:
   API key: ***
@@ -449,17 +488,19 @@ Result: ✅ **SECURE** - Secrets properly redacted and protected
 
 ### WSL2 Compatibility
 
-**WSL Version:** 2.4.13.0  
+**WSL Version:** 2.4.13.0\
 **Kernel Version:** 5.15.167.4-1
 
 File System Access:
 
 Command:
+
 ```
 wsl -e ls -la /mnt/c/Users/user/Downloads/stakpak/
 ```
 
 Output:
+
 ```
 total 44572
 drwxrwxrwx 1 user user     4096 Oct 29 13:47 .
@@ -470,12 +511,13 @@ drwxrwxrwx 1 user user     4096 Oct 29 13:47 ..
 
 Status: ✅ WSL2 can access Windows files
 
-**Note:** Windows .exe requires Linux binary for native WSL2 execution  
+**Note:** Windows .exe requires Linux binary for native WSL2 execution\
 **Recommendation:** Download Linux binary for native WSL2 support
 
 ### Docker Integration
 
 **Docker Status:**
+
 ```
 Version: 28.5.1 (build e180ab8)
 Running: ✅ Yes
@@ -484,11 +526,13 @@ Running: ✅ Yes
 **Warden Commands:**
 
 Command:
+
 ```powershell
 stakpak.exe warden --help
 ```
 
 Output:
+
 ```
 Stakpak Warden wraps coding agents to apply security policies
 
@@ -513,7 +557,7 @@ Status: ✅ Docker integration working, Warden fully functional
 
 ## Known Limitations
 
-### Minor Issues 
+### Minor Issues
 
 1. **OAuth Timeout Fallback**
    - Issue: Browser OAuth flow may timeout
@@ -545,43 +589,53 @@ Status: ✅ Docker integration working, Warden fully functional
 
 ## Installation Guide
 
-### Quick Start 
+### Quick Start
 
 #### Step 1: Download the Binary
+
 1. Go to https://github.com/stakpak/agent/releases
 2. Download `stakpak-windows-x86_64.zip`
 3. Extract to preferred location (e.g., `Downloads\stakpak`)
 
 #### Step 2: Verify Installation
+
 Open PowerShell in the extracted folder and run:
+
 ```powershell
 .\stakpak.exe version
 ```
+
 Expected output: `stakpak v0.2.65 (https://github.com/stakpak/agent)`
 
 #### Step 3: Create API Key
+
 1. Go to https://stakpak.dev/generate-api-key
 2. Copy your API key (starts with `stkpk_api`)
 
 #### Step 4: Login
+
 ```powershell
 .\stakpak.exe login --api-key YOUR_API_KEY_HERE
 ```
 
 #### Step 5: Verify Login
+
 ```powershell
 .\stakpak.exe account
 ```
+
 Shows your account information if successful.
 
 #### Step 6: (Optional) Add to PATH for Global Access
 
 **Temporary (current session):**
+
 ```powershell
 $env:Path += ";C:\Users\YourName\Downloads\stakpak"
 ```
 
 **Permanent (all sessions):**
+
 ```powershell
 [Environment]::SetEnvironmentVariable(
   "Path",
@@ -593,6 +647,7 @@ $env:Path += ";C:\Users\YourName\Downloads\stakpak"
 After permanent setup, open a new terminal and use `stakpak` from anywhere.
 
 ### Verification Checklist
+
 ```
 ✅ Binary extracted successfully
 ✅ stakpak.exe version works
@@ -611,6 +666,7 @@ After permanent setup, open a new terminal and use `stakpak` from anywhere.
 **Problem:** Command not found in PowerShell or CMD
 
 **Solutions:**
+
 1. Make sure you're in the stakpak folder: `cd Downloads\stakpak`
 2. Use full path: `.\stakpak.exe version`
 3. Or add to PATH (see Installation Guide step 6)
@@ -620,6 +676,7 @@ After permanent setup, open a new terminal and use `stakpak` from anywhere.
 **Problem:** Browser doesn't open or login flow times out
 
 **Solution:** Use manual API key entry
+
 ```powershell
 .\stakpak.exe login --api-key YOUR_API_KEY_HERE
 ```
@@ -629,6 +686,7 @@ After permanent setup, open a new terminal and use `stakpak` from anywhere.
 **Problem:** SmartScreen or Defender shows warning
 
 **Solution:** It's safe - Binary is tested and clean
+
 1. Click "More info"
 2. Click "Run anyway"
 3. Binary runs without issues
@@ -638,6 +696,7 @@ After permanent setup, open a new terminal and use `stakpak` from anywhere.
 **Problem:** "Access Denied" when running stakpak.exe
 
 **Solutions:**
+
 1. Move to writable location (e.g., Downloads, Documents)
 2. Check file permissions
 3. Try a different folder location
@@ -647,6 +706,7 @@ After permanent setup, open a new terminal and use `stakpak` from anywhere.
 **Problem:** Antivirus software flags stakpak
 
 **Solution:** Add to exceptions
+
 - In Windows Defender: Search "Virus & threat protection" → Add exceptions → Add file
 
 ### Issue 6: Path with Spaces Issues
@@ -654,6 +714,7 @@ After permanent setup, open a new terminal and use `stakpak` from anywhere.
 **Problem:** Commands fail with paths containing spaces
 
 **Solution:** Always quote paths with spaces
+
 ```powershell
 # Correct
 .\stakpak.exe --workdir "C:\Program Files\MyProject"
@@ -717,6 +778,7 @@ Minor Issues Found ........... ⚠️ 3 (documented & acceptable)
 Commands Tested .............. ✅ 20+
 Test Coverage ................ ✅ 100%
 ```
+
 ---
 
 ## Conclusion
@@ -726,5 +788,3 @@ Users can confidently deploy Stakpak on Windows 11 and expect a smooth experienc
 For questions or issues, refer to the troubleshooting section or the official documentation at https://stakpak.gitbook.io/docs.
 
 ---
-
-

@@ -2,6 +2,7 @@
 name = "popup-widget"
 version = "0.1.0"
 edition = "2021"
+description = "Popup widget for terminal applications"
 
 [dependencies]
 crossterm = { workspace = true }

@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, PartialEq, Eq)]
 pub enum WardenCommands {
     /// Run coding agent in a container and apply security policies
     Run {
@@ -56,7 +56,7 @@ impl WardenCommands {
         let mut needs_tty = false;
 
         match self {
-            WardenCommands::Run {
+            Self::Run {
                 image,
                 env,
                 volume,
@@ -91,7 +91,7 @@ impl WardenCommands {
                     cmd.arg(command);
                 }
             }
-            WardenCommands::Logs {
+            Self::Logs {
                 blocked_only,
                 limit,
                 detailed,
@@ -110,10 +110,10 @@ impl WardenCommands {
                     cmd.arg("--detailed");
                 }
             }
-            WardenCommands::ClearLogs => {
+            Self::ClearLogs => {
                 cmd.arg("clear-logs");
             }
-            WardenCommands::Version => {
+            Self::Version => {
                 cmd.arg("version");
             }
         }
@@ -141,7 +141,7 @@ async fn get_warden_plugin_path() -> String {
 
 /// Helper function to prepare volumes for warden container
 /// Collects volumes from config and always appends stakpak config if it exists and isn't already mounted
-/// If check_enabled is true, only adds volumes when warden is enabled in config
+/// If `check_enabled` is true, only adds volumes when warden is enabled in config
 fn prepare_volumes(config: &AppConfig, check_enabled: bool) -> Vec<String> {
     let mut volumes_to_mount = Vec::new();
 
@@ -158,7 +158,7 @@ fn prepare_volumes(config: &AppConfig, check_enabled: bool) -> Vec<String> {
         if config_path.exists() {
             let config_path_str = config_path.to_string_lossy();
             let stakpak_config_mount =
-                format!("{}:/home/agent/.stakpak/config.toml:ro", config_path_str);
+                format!("{config_path_str}:/home/agent/.stakpak/config.toml:ro");
 
             // Check if stakpak config is already in the volume list
             let config_already_mounted = volumes_to_mount.iter().any(|v| {
@@ -180,7 +180,7 @@ fn prepare_volumes(config: &AppConfig, check_enabled: bool) -> Vec<String> {
 fn expand_volume_path(volume: String) -> String {
     if volume.starts_with("~/") || volume.starts_with("~:") {
         if let Ok(home_dir) = std::env::var("HOME") {
-            volume.replacen("~", &home_dir, 1)
+            volume.replacen('~', &home_dir, 1)
         } else {
             volume
         }
@@ -199,11 +199,11 @@ fn execute_warden_command(mut cmd: Command, needs_tty: bool) -> Result<(), Strin
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to spawn warden process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn warden process: {e}"))?;
 
         let status = child
             .wait()
-            .map_err(|e| format!("Failed to wait for warden process: {}", e))?;
+            .map_err(|e| format!("Failed to wait for warden process: {e}"))?;
 
         if !status.success() {
             return Err(format!(
@@ -219,7 +219,7 @@ fn execute_warden_command(mut cmd: Command, needs_tty: bool) -> Result<(), Strin
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to spawn warden process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn warden process: {e}"))?;
 
         // Handle stdout streaming
         let stdout_handle = if let Some(stdout) = child.stdout.take() {
@@ -227,7 +227,7 @@ fn execute_warden_command(mut cmd: Command, needs_tty: bool) -> Result<(), Strin
             Some(thread::spawn(move || {
                 for line in stdout_reader.lines() {
                     match line {
-                        Ok(line) => println!("{}", line),
+                        Ok(line) => println!("{line}"),
                         Err(_) => break,
                     }
                 }
@@ -242,7 +242,7 @@ fn execute_warden_command(mut cmd: Command, needs_tty: bool) -> Result<(), Strin
             Some(thread::spawn(move || {
                 for line in stderr_reader.lines() {
                     match line {
-                        Ok(line) => eprintln!("{}", line),
+                        Ok(line) => eprintln!("{line}"),
                         Err(_) => break,
                     }
                 }
@@ -254,7 +254,7 @@ fn execute_warden_command(mut cmd: Command, needs_tty: bool) -> Result<(), Strin
         // Wait for the process to complete
         let status = child
             .wait()
-            .map_err(|e| format!("Failed to wait for warden process: {}", e))?;
+            .map_err(|e| format!("Failed to wait for warden process: {e}"))?;
 
         // Wait for streaming threads to complete
         if let Some(handle) = stdout_handle {
@@ -357,17 +357,17 @@ pub async fn run_stakpak_in_warden(config: AppConfig, args: &[String]) -> Result
 
     // If profile was specified, pass it through
     if let Ok(profile) = std::env::var("STAKPAK_PROFILE") {
-        cmd.args(["--env", &format!("STAKPAK_PROFILE={}", profile)]);
+        cmd.args(["--env", &format!("STAKPAK_PROFILE={profile}")]);
     }
 
     // Pass through API key if set
     if let Ok(api_key) = std::env::var("STAKPAK_API_KEY") {
-        cmd.args(["--env", &format!("STAKPAK_API_KEY={}", api_key)]);
+        cmd.args(["--env", &format!("STAKPAK_API_KEY={api_key}")]);
     }
 
     // Pass through API endpoint if set
     if let Ok(api_endpoint) = std::env::var("STAKPAK_API_ENDPOINT") {
-        cmd.args(["--env", &format!("STAKPAK_API_ENDPOINT={}", api_endpoint)]);
+        cmd.args(["--env", &format!("STAKPAK_API_ENDPOINT={api_endpoint}")]);
     }
 
     // Join all stakpak arguments into a single command string

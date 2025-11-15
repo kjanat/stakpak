@@ -10,7 +10,7 @@ const OAUTH_TOKEN_URL: &str = "https://console.anthropic.com/v1/oauth/token";
 const REDIRECT_URI: &str = "https://console.anthropic.com/oauth/code/callback";
 const SCOPES: &str = "org:create_api_key user:profile user:inference";
 
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, PartialEq, Eq)]
 pub enum AuthCommands {
     /// Login to Anthropic/Claude Code with OAuth
     Login {
@@ -90,11 +90,12 @@ async fn exchange_code_for_tokens(
     let expires_in = json["expires_in"].as_u64().unwrap_or(3600);
 
     // Calculate expiry time in milliseconds
+    #[allow(clippy::cast_possible_truncation)]
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| format!("Failed to get current time: {e}"))?
         .as_millis()
-        .min(u64::MAX as u128) as u64;
+        .min(u128::from(u64::MAX)) as u64;
 
     let expires = now + (expires_in * 1000);
 

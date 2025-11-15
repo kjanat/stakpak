@@ -7,7 +7,7 @@ RUN cargo build --release --target-dir /usr/src/app/target && \
 
 FROM python:3.13-slim-bookworm
 LABEL org.opencontainers.image.source="https://github.com/kjanat/stakpak-agent" \
-  org.opencontainers.image.description="Stakpak Agent"
+      org.opencontainers.image.description="Stakpak Agent"
 # maintainer="contact@stakpak.dev"
 
 # Install basic dependencies
@@ -93,7 +93,6 @@ RUN ARCH=$(uname -m) && \
   mv terraform /usr/local/bin && \
   rm "terraform_${TERRAFORM_VERSION}_linux_${TERRAFORM_ARCH}.zip"
 
-
 COPY --from=builder /usr/src/app/target/release/stakpak /usr/local/bin
 RUN chmod +x /usr/local/bin/stakpak
 
@@ -102,12 +101,10 @@ RUN groupadd -r agent && useradd -r -g agent -s /bin/bash -m agent && mkdir -p /
 # Create docker group and add agent user to it
 RUN groupadd -r docker && usermod -aG docker agent
 
-
 # Configure sudo to allow package management
 RUN echo "# Allow agent user to manage packages" > /etc/sudoers.d/agent && \
   echo "agent ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt, /usr/bin/dpkg, /usr/bin/snap" >> /etc/sudoers.d/agent && \
   chmod 440 /etc/sudoers.d/agent
-
 
 WORKDIR /agent/
 

@@ -22,8 +22,7 @@ pub async fn list_sessions(client: &Client) -> Result<Vec<SessionInfo>, String> 
             // Get the last checkpoint's updated_at for sorting
             let last_checkpoint_timestamp = checkpoints
                 .last()
-                .map(|c| c.updated_at)
-                .unwrap_or(s.updated_at);
+                .map_or(s.updated_at, |c| c.updated_at);
 
             let session_info = SessionInfo {
                 id: s.id.to_string(),

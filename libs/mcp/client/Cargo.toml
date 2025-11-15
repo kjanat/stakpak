@@ -2,6 +2,7 @@
 name = "stakpak-mcp-client"
 version = { workspace = true }
 edition = "2024"
+description = "MCP client library for Stakpak"
 
 [dependencies]
 anyhow = { workspace = true }

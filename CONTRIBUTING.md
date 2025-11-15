@@ -19,6 +19,7 @@ Thank you for your interest in contributing to Stakpak! We're excited to have yo
 We are committed to providing a welcoming and inclusive environment for all contributors. Please be respectful, constructive, and collaborative in all interactions.
 
 **Expected Behavior:**
+
 - Use welcoming and inclusive language
 - Be respectful of differing viewpoints and experiences
 - Gracefully accept constructive criticism
@@ -30,39 +31,51 @@ We are committed to providing a welcoming and inclusive environment for all cont
 There are many ways to contribute to Stakpak:
 
 ### 1. **Report Bugs**
+
 Found a bug? Help us fix it!
+
 - Check if the issue already exists in [GitHub Issues](https://github.com/stakpak/agent/issues)
 - If not, create a new issue with a clear title and description
 - Include steps to reproduce, expected behavior, and actual behavior
 - Add relevant labels (e.g., `bug`, `windows`, `performance`)
 
 ### 2. **Suggest Features**
+
 Have an idea for a new feature?
+
 - Open an issue with the `enhancement` label
 - Describe the feature, its use case, and potential implementation
 - Discuss with maintainers before starting work on large features
 
 ### 3. **Fix Issues**
+
 Browse our [open issues](https://github.com/stakpak/agent/issues) and pick one to work on:
+
 - Issues labeled `good first issue` are great for newcomers
 - Issues labeled `help wanted` are actively seeking contributors
 - Comment on the issue to let others know you're working on it
 
 ### 4. **Write Documentation**
+
 Help improve our documentation:
+
 - Fix typos or clarify existing docs
 - Add examples and tutorials
 - Document undocumented features
 - Improve code comments
 
 ### 5. **Test on Different Platforms**
+
 We support Linux, macOS, and Windows. Testing on different platforms is valuable:
+
 - See [ISSUES.md](ISSUES.md) for platform testing issues
 - Report platform-specific bugs
 - Help verify fixes work across platforms
 
 ### 6. **Review Pull Requests**
+
 Help review open pull requests:
+
 - Test the changes locally
 - Provide constructive feedback
 - Check code quality and style
@@ -72,17 +85,20 @@ Help review open pull requests:
 Help spread the word about Stakpak and make it easier for others to learn:
 
 #### Write Technical Blogs
-- Share tutorials, deep-dives, and case studies using Stakpak  
-- Publish on your blog, Medium, Dev.to  
+
+- Share tutorials, deep-dives, and case studies using Stakpak
+- Publish on your blog, Medium, Dev.to
 
 #### Create Technical Videos
+
 - Record walkthroughs, demos
-- Publish on YouTube, TikTok, or LinkedIn  
-- Keep them short, and practical  
+- Publish on YouTube, TikTok, or LinkedIn
+- Keep them short, and practical
 
 #### Host Live Streams
-- Stream deploying sessions, feature demos, or Q&A on Twitch, YouTube, or LinkedIn Live  
-- Show how you use Stakpak in real-world DevOps workflows  
+
+- Stream deploying sessions, feature demos, or Q&A on Twitch, YouTube, or LinkedIn Live
+- Show how you use Stakpak in real-world DevOps workflows
 
 Content creators will be featured on our social media and newsletter.
 
@@ -171,6 +187,7 @@ git checkout -b fix/issue-123-description
 ```
 
 **Branch Naming Conventions:**
+
 - `feature/` - New features
 - `fix/` - Bug fixes
 - `docs/` - Documentation changes
@@ -223,6 +240,7 @@ Closes #123"
 ```
 
 **Commit Message Format:**
+
 ```
 <type>: <subject>
 
@@ -232,6 +250,7 @@ Closes #123"
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -274,7 +293,7 @@ cargo clippy --all-targets
    ```rust
    // ❌ Bad
    let value = some_option.unwrap();
-   
+
    // ✅ Good
    let value = match some_option {
        Some(v) => v,
@@ -289,7 +308,7 @@ cargo clippy --all-targets
 
    ```rust
    use anyhow::{Result, Context};
-   
+
    fn read_config() -> Result<Config> {
        let contents = std::fs::read_to_string("config.toml")
            .context("Failed to read config file")?;
@@ -404,24 +423,29 @@ cargo test -- --test-threads=1 --nocapture
 3. **PR Description Template**
    ```markdown
    ## Description
+
    Brief description of what this PR does.
 
    ## Related Issues
+
    Fixes #123
 
    ## Changes Made
+
    - Change 1
    - Change 2
    - Change 3
 
    ## Testing
+
    - [ ] All tests pass locally
    - [ ] Added tests for new functionality
    - [ ] Tested on Linux/macOS/Windows (specify which)
 
    ## Screenshots (if applicable)
-   
+
    ## Breaking Changes
+
    None / List any breaking changes
    ```
 
@@ -448,7 +472,7 @@ Before submitting, ensure:
 ### Code Documentation
 
 - Add doc comments for public APIs:
-  ```rust
+  ````rust
   /// Reads a configuration file from the specified path.
   ///
   /// # Arguments
@@ -464,7 +488,7 @@ Before submitting, ensure:
   pub fn read_config(path: &str) -> Result<Config> {
       // ...
   }
-  ```
+  ````
 
 ### User Documentation
 
@@ -497,6 +521,7 @@ Before submitting, ensure:
 ### Stuck?
 
 If you're stuck or need help:
+
 1. Check the existing documentation
 2. Search closed issues and PRs
 3. Ask in GitHub Discussions
@@ -505,6 +530,7 @@ If you're stuck or need help:
 ## 🎉 Recognition
 
 We value all contributions! Contributors will be:
+
 - Listed in our contributors list
 - Mentioned in release notes for significant contributions
 - Thanked in commit messages and PR descriptions

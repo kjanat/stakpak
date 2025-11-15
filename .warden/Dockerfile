@@ -2,8 +2,8 @@ ARG BASE_IMAGE_TAG=latest
 
 FROM ghcr.io/stakpak/agent:${BASE_IMAGE_TAG}
 LABEL org.opencontainers.image.source="https://github.com/stakpak/agent" \
-    org.opencontainers.image.description="Stakpak Agent Warden Wrapper" \
-    maintainer="contact@stakpak.dev"
+      org.opencontainers.image.description="Stakpak Agent Warden Wrapper" \
+      maintainer="contact@stakpak.dev"
 
 USER root
 

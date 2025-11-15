@@ -133,7 +133,7 @@ pub async fn run_interactive(
         });
 
         let protocol = if enable_mtls { "https" } else { "http" };
-        let local_mcp_server_host = format!("{}://{}", protocol, bind_address);
+        let local_mcp_server_host = format!("{protocol}://{bind_address}");
 
         let certificate_chain_for_server = certificate_chain.clone();
         let subagent_configs_for_server = subagent_configs.clone();
@@ -209,7 +209,7 @@ pub async fn run_interactive(
         let client_handle: tokio::task::JoinHandle<ClientTaskResult> = tokio::spawn(async move {
             let mut current_session_id: Option<Uuid> = None;
             let mut client =
-                Client::new(&ctx_for_client.clone().into()).map_err(|e| e.to_string())?;
+                Client::new(&ctx_for_client.clone().into())?;
 
             let data = client.get_my_account().await?;
             send_input_event(&input_tx, InputEvent::GetStatus(data.to_text())).await?;
@@ -245,8 +245,7 @@ pub async fn run_interactive(
                 // Try to get session ID from checkpoint
                 let checkpoint_uuid = Uuid::parse_str(&checkpoint_id_str).map_err(|_| {
                     format!(
-                        "Invalid checkpoint ID '{}' - must be a valid UUID",
-                        checkpoint_id_str
+                        "Invalid checkpoint ID '{checkpoint_id_str}' - must be a valid UUID"
                     )
                 })?;
 
@@ -300,7 +299,7 @@ pub async fn run_interactive(
                         if let Some(tool_call_results) = &tool_calls_results
                             && let Some(history_str) = tool_call_history_string(tool_call_results)
                         {
-                            user_input = format!("{}\n\n{}", history_str, user_input);
+                            user_input = format!("{history_str}\n\n{user_input}");
                         }
 
                         // Add local context to the user input
@@ -314,7 +313,7 @@ pub async fn run_interactive(
                                     add_local_context(&messages, &user_input, &local_context, true)
                                         .await
                                         .map_err(|e| {
-                                            format!("Failed to format local context: {}", e)
+                                            format!("Failed to format local context: {e}")
                                         })?;
 
                                 // Then add rulebooks
@@ -490,82 +489,15 @@ pub async fn run_interactive(
                                 ),
                             )
                             .await?;
-                            match resume_session_from_checkpoint(&client, session_id, &input_tx)
-                                .await
-                            {
-                                Ok((chat_messages, tool_calls, session_id_uuid)) => {
-                                    // Track the current session ID
-                                    current_session_id = Some(session_id_uuid);
-
-                                    // Mark that we need to update rulebooks on the next user message
-                                    should_update_rulebooks_on_next_message = true;
-
-                                    // Reset usage for the resumed session
-                                    total_session_usage =
-                                        stakpak_shared::models::integrations::openai::Usage {
-                                            prompt_tokens: 0,
-                                            completion_tokens: 0,
-                                            total_tokens: 0,
-                                            prompt_tokens_details: None,
-                                        };
-
-                                    messages.extend(chat_messages);
-                                    tools_queue.extend(tool_calls.clone());
-
-                                    if !tools_queue.is_empty() {
-                                        send_input_event(
-                                            &input_tx,
-                                            InputEvent::MessageToolCalls(tools_queue.clone()),
-                                        )
-                                        .await?;
-                                        let initial_tool_call = tools_queue.remove(0);
-                                        send_tool_call(&input_tx, &initial_tool_call).await?;
-                                    }
-                                    send_input_event(
-                                        &input_tx,
-                                        InputEvent::EndLoadingOperation(
-                                            LoadingOperation::CheckpointResume,
-                                        ),
-                                    )
-                                    .await?;
-                                }
-                                Err(_) => {
-                                    // Error already handled in the function
-                                    send_input_event(
-                                        &input_tx,
-                                        InputEvent::EndLoadingOperation(
-                                            LoadingOperation::CheckpointResume,
-                                        ),
-                                    )
-                                    .await?;
-                                    continue;
-                                }
-                            }
-                        } else {
-                            send_input_event(
-                                &input_tx,
-                                InputEvent::Error("No active session to resume".to_string()),
-                            )
-                            .await?;
-                        }
-                        continue;
-                    }
-                    OutputEvent::SwitchToSession(session_id) => {
-                        send_input_event(
-                            &input_tx,
-                            InputEvent::StartLoadingOperation(LoadingOperation::CheckpointResume),
-                        )
-                        .await?;
-                        match resume_session_from_checkpoint(&client, &session_id, &input_tx).await
-                        {
-                            Ok((chat_messages, tool_calls, session_id_uuid)) => {
+                            if let Ok((chat_messages, tool_calls, session_id_uuid)) = resume_session_from_checkpoint(&client, session_id, &input_tx)
+                                .await {
                                 // Track the current session ID
                                 current_session_id = Some(session_id_uuid);
 
                                 // Mark that we need to update rulebooks on the next user message
                                 should_update_rulebooks_on_next_message = true;
 
-                                // Reset usage for the switched session
+                                // Reset usage for the resumed session
                                 total_session_usage =
                                     stakpak_shared::models::integrations::openai::Usage {
                                         prompt_tokens: 0,
@@ -593,8 +525,8 @@ pub async fn run_interactive(
                                     ),
                                 )
                                 .await?;
-                            }
-                            Err(_) => {
+                            } else {
+                                // Error already handled in the function
                                 send_input_event(
                                     &input_tx,
                                     InputEvent::EndLoadingOperation(
@@ -604,6 +536,65 @@ pub async fn run_interactive(
                                 .await?;
                                 continue;
                             }
+                        } else {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::Error("No active session to resume".to_string()),
+                            )
+                            .await?;
+                        }
+                        continue;
+                    }
+                    OutputEvent::SwitchToSession(session_id) => {
+                        send_input_event(
+                            &input_tx,
+                            InputEvent::StartLoadingOperation(LoadingOperation::CheckpointResume),
+                        )
+                        .await?;
+                        if let Ok((chat_messages, tool_calls, session_id_uuid)) = resume_session_from_checkpoint(&client, &session_id, &input_tx).await {
+                            // Track the current session ID
+                            current_session_id = Some(session_id_uuid);
+
+                            // Mark that we need to update rulebooks on the next user message
+                            should_update_rulebooks_on_next_message = true;
+
+                            // Reset usage for the switched session
+                            total_session_usage =
+                                stakpak_shared::models::integrations::openai::Usage {
+                                    prompt_tokens: 0,
+                                    completion_tokens: 0,
+                                    total_tokens: 0,
+                                    prompt_tokens_details: None,
+                                };
+
+                            messages.extend(chat_messages);
+                            tools_queue.extend(tool_calls.clone());
+
+                            if !tools_queue.is_empty() {
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::MessageToolCalls(tools_queue.clone()),
+                                )
+                                .await?;
+                                let initial_tool_call = tools_queue.remove(0);
+                                send_tool_call(&input_tx, &initial_tool_call).await?;
+                            }
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::EndLoadingOperation(
+                                    LoadingOperation::CheckpointResume,
+                                ),
+                            )
+                            .await?;
+                        } else {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::EndLoadingOperation(
+                                    LoadingOperation::CheckpointResume,
+                                ),
+                            )
+                            .await?;
+                            continue;
                         }
                         continue;
                     }
@@ -749,8 +740,7 @@ pub async fn run_interactive(
                             send_input_event(
                                 &input_tx,
                                 InputEvent::Error(format!(
-                                    "No credentials found for {} provider",
-                                    new_provider
+                                    "No credentials found for {new_provider} provider"
                                 )),
                             )
                             .await?;
@@ -766,7 +756,7 @@ pub async fn run_interactive(
                         ) {
                             send_input_event(
                                 &input_tx,
-                                InputEvent::Error(format!("Failed to update provider: {}", e)),
+                                InputEvent::Error(format!("Failed to update provider: {e}")),
                             )
                             .await?;
                             continue;
@@ -780,8 +770,7 @@ pub async fn run_interactive(
                                     send_input_event(
                                         &input_tx,
                                         InputEvent::Error(format!(
-                                            "Failed to reload config: {}",
-                                            e
+                                            "Failed to reload config: {e}"
                                         )),
                                     )
                                     .await?;
@@ -795,7 +784,7 @@ pub async fn run_interactive(
                             Err(e) => {
                                 send_input_event(
                                     &input_tx,
-                                    InputEvent::Error(format!("Failed to create client: {}", e)),
+                                    InputEvent::Error(format!("Failed to create client: {e}")),
                                 )
                                 .await?;
                                 continue;
@@ -945,27 +934,24 @@ pub async fn run_interactive(
                                     send_input_event(
                                         &input_tx,
                                         InputEvent::Error(format!(
-                                            "RETRY_ATTEMPT_{}",
-                                            retry_attempts
+                                            "RETRY_ATTEMPT_{retry_attempts}"
                                         )),
                                     )
                                     .await?;
 
                                     // Loading will be managed by stream processing on retry
                                     continue;
-                                } else {
-                                    send_input_event(
-                                        &input_tx,
-                                        InputEvent::Error("MAX_RETRY_REACHED".to_string()),
-                                    )
-                                    .await?;
-                                    break Err(e);
                                 }
-                            } else {
-                                send_input_event(&input_tx, InputEvent::Error(format!("{:?}", e)))
-                                    .await?;
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::Error("MAX_RETRY_REACHED".to_string()),
+                                )
+                                .await?;
                                 break Err(e);
                             }
+                            send_input_event(&input_tx, InputEvent::Error(format!("{e:?}")))
+                                .await?;
+                            break Err(e);
                         }
                     }
                 };
@@ -1054,9 +1040,7 @@ pub async fn run_interactive(
 
                         send_input_event(&input_tx, InputEvent::ResetAutoApproveMessage).await?;
                     }
-                    Err(_) => {
-                        continue;
-                    }
+                    Err(_) => {}
                 }
             }
 
@@ -1069,7 +1053,7 @@ pub async fn run_interactive(
         });
 
         // Wait for all tasks to finish
-        let (client_res, _, _, _) =
+        let (client_res, _, (), ()) =
             tokio::try_join!(client_handle, tui_handle, mcp_handle, mcp_progress_handle)
                 .map_err(|e| e.to_string())?;
 
@@ -1084,7 +1068,7 @@ pub async fn run_interactive(
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
             // Fetch and filter rulebooks for the new profile
-            let client = Client::new(&new_config.clone().into()).map_err(|e| e.to_string())?;
+            let client = Client::new(&new_config.clone().into())?;
 
             let new_rulebooks = client.list_rulebooks().await.ok().map(|rulebooks| {
                 if let Some(rulebook_config) = &new_config.rulebooks {
@@ -1106,18 +1090,15 @@ pub async fn run_interactive(
 
         // Normal exit - no profile switch requested
         // Display final stats and session info
-        let client = Client::new(&ctx.clone().into()).map_err(|e| e.to_string())?;
+        let client = Client::new(&ctx.clone().into())?;
 
         // Display session stats
         if let Some(session_id) = final_session_id {
-            match client.get_agent_session_stats(session_id).await {
-                Ok(stats) => {
-                    let renderer = OutputRenderer::new(OutputFormat::Text, false);
-                    print!("{}", renderer.render_session_stats(&stats));
-                }
-                Err(_) => {
-                    // Don't fail the whole operation if stats fetch fails
-                }
+            if let Ok(stats) = client.get_agent_session_stats(session_id).await {
+                let renderer = OutputRenderer::new(OutputFormat::Text, false);
+                print!("{}", renderer.render_session_stats(&stats));
+            } else {
+                // Don't fail the whole operation if stats fetch fails
             }
         }
 
@@ -1136,25 +1117,23 @@ pub async fn run_interactive(
             .iter()
             .rev()
             .find(|m| m.role == stakpak_shared::models::integrations::openai::Role::Assistant)
-            .and_then(|m| m.content.as_ref().and_then(|c| c.extract_checkpoint_id()));
+            .and_then(|m| m.content.as_ref().and_then(stakpak_shared::models::integrations::openai::MessageContent::extract_checkpoint_id));
 
         if let Some(latest_checkpoint) = latest_checkpoint {
             println!(
-                r#"To resume, run:
-stakpak -c {}
+                r"To resume, run:
+stakpak -c {latest_checkpoint}
 
 To get session data, run:
-stakpak agent get {}
-"#,
-                latest_checkpoint, latest_checkpoint
+stakpak agent get {latest_checkpoint}
+"
             );
         }
 
         if let Some(session_id) = final_session_id {
             println!(
                 "To view full session in browser:
-https://stakpak.dev/{}/agent-sessions/{}",
-                username, session_id
+https://stakpak.dev/{username}/agent-sessions/{session_id}"
             );
         }
 

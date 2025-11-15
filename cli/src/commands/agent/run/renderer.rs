@@ -4,7 +4,7 @@ use stakpak_api::models::{AgentSessionStats, ToolUsageStats};
 use stakpak_shared::models::integrations::openai::ChatMessage;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutputFormat {
     Json,
     Text,
@@ -13,8 +13,8 @@ pub enum OutputFormat {
 impl fmt::Display for OutputFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OutputFormat::Json => write!(f, "json"),
-            OutputFormat::Text => write!(f, "text"),
+            Self::Json => write!(f, "json"),
+            Self::Text => write!(f, "text"),
         }
     }
 }
@@ -24,11 +24,10 @@ impl std::str::FromStr for OutputFormat {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "json" => Ok(OutputFormat::Json),
-            "text" => Ok(OutputFormat::Text),
+            "json" => Ok(Self::Json),
+            "text" => Ok(Self::Text),
             _ => Err(format!(
-                "Invalid output format: {}. Valid values are 'json' or 'text'",
-                s
+                "Invalid output format: {s}. Valid values are 'json' or 'text'"
             )),
         }
     }
@@ -40,7 +39,7 @@ pub struct OutputRenderer {
 }
 
 impl OutputRenderer {
-    pub fn new(format: OutputFormat, verbose: bool) -> Self {
+    pub const fn new(format: OutputFormat, verbose: bool) -> Self {
         Self { format, verbose }
     }
 
@@ -50,8 +49,7 @@ impl OutputRenderer {
         match (&self.format, self.verbose) {
             (OutputFormat::Text, true) => {
                 format!(
-                    "╭─────────────────────────────────────────────────────────────────────────────────╮\n│ {:<79} │\n╰─────────────────────────────────────────────────────────────────────────────────╯\n",
-                    title
+                    "╭─────────────────────────────────────────────────────────────────────────────────╮\n│ {title:<79} │\n╰─────────────────────────────────────────────────────────────────────────────────╯\n"
                 )
             }
             _ => String::new(),
@@ -69,7 +67,7 @@ impl OutputRenderer {
                         if tool_count == 1 { "" } else { "s" }
                     )
                 } else {
-                    format!("Step {} - Agent response", step)
+                    format!("Step {step} - Agent response")
                 };
 
                 format!(
@@ -99,7 +97,7 @@ impl OutputRenderer {
                         "┌─ Final Agent Response ──────────────────────────────────────────────────────────\n{}\n└─────────────────────────────────────────────────────────────────────────────────",
                         formatted_content
                             .lines()
-                            .map(|line| format!("│ {}", line))
+                            .map(|line| format!("│ {line}"))
                             .collect::<Vec<_>>()
                             .join("\n")
                     )
@@ -110,7 +108,7 @@ impl OutputRenderer {
                     if self.verbose {
                         // Show full response
                         for line in formatted_content.lines() {
-                            output.push_str(&format!("  {}\n", line));
+                            output.push_str(&format!("  {line}\n"));
                         }
                     } else {
                         // Show truncated response - first 3 lines max
@@ -120,11 +118,11 @@ impl OutputRenderer {
                         for line in lines.iter().take(display_lines) {
                             let truncated_line = if line.chars().count() > 80 {
                                 let truncated: String = line.chars().take(80).collect();
-                                format!("{}...", truncated)
+                                format!("{truncated}...")
                             } else {
-                                line.to_string()
+                                (*line).to_string()
                             };
-                            output.push_str(&format!("  {}\n", truncated_line));
+                            output.push_str(&format!("  {truncated_line}\n"));
                         }
 
                         if lines.len() > 3 {
@@ -156,13 +154,13 @@ impl OutputRenderer {
                         if let Ok(pretty_json) = serde_json::to_string_pretty(&truncated_params) {
                             output.push_str("  Arguments:\n");
                             for line in pretty_json.lines() {
-                                output.push_str(&format!("    {}\n", line));
+                                output.push_str(&format!("    {line}\n"));
                             }
                         } else {
-                            output.push_str(&format!("  Arguments: {}\n", tool_params));
+                            output.push_str(&format!("  Arguments: {tool_params}\n"));
                         }
                     } else {
-                        output.push_str(&format!("  Arguments: {}\n", tool_params));
+                        output.push_str(&format!("  Arguments: {tool_params}\n"));
                     }
                 }
                 output
@@ -178,7 +176,7 @@ impl OutputRenderer {
 
                 if self.verbose {
                     for line in result.lines() {
-                        output.push_str(&format!("    {}\n", line));
+                        output.push_str(&format!("    {line}\n"));
                     }
                     output.push('\n'); // Add blank line after verbose tool output
                 } else {
@@ -187,11 +185,11 @@ impl OutputRenderer {
                     if !first_line.is_empty() {
                         let truncated = if first_line.chars().count() > 80 {
                             let truncated_chars: String = first_line.chars().take(80).collect();
-                            format!("{}...", truncated_chars)
+                            format!("{truncated_chars}...")
                         } else {
                             first_line.to_string()
                         };
-                        output.push_str(&format!("    {}\n", truncated));
+                        output.push_str(&format!("    {truncated}\n"));
                     }
                 }
                 output
@@ -202,14 +200,14 @@ impl OutputRenderer {
 
     pub fn render_info(&self, message: &str) -> String {
         match (&self.format, self.verbose) {
-            (OutputFormat::Text, true) => format!("[info] {}\n", message),
+            (OutputFormat::Text, true) => format!("[info] {message}\n"),
             _ => String::new(),
         }
     }
 
     pub fn render_success(&self, message: &str) -> String {
         match (&self.format, self.verbose) {
-            (OutputFormat::Text, true) => format!("[success] {}\n", message),
+            (OutputFormat::Text, true) => format!("[success] {message}\n"),
             _ => String::new(),
         }
     }
@@ -217,21 +215,21 @@ impl OutputRenderer {
     pub fn render_warning(&self, message: &str) -> String {
         match self.format {
             OutputFormat::Json => String::new(),
-            OutputFormat::Text => format!("[warning] {}\n", message),
+            OutputFormat::Text => format!("[warning] {message}\n"),
         }
     }
 
     pub fn render_error(&self, message: &str) -> String {
         match self.format {
             OutputFormat::Json => String::new(),
-            OutputFormat::Text => format!("[error] {}\n", message),
+            OutputFormat::Text => format!("[error] {message}\n"),
         }
     }
 
     pub fn render_stat_line(&self, label: &str, value: &str) -> String {
         match self.format {
             OutputFormat::Json => String::new(),
-            OutputFormat::Text => self.render_info(&format!("{}: {}", label, value)),
+            OutputFormat::Text => self.render_info(&format!("{label}: {value}")),
         }
     }
 
@@ -295,7 +293,7 @@ impl OutputRenderer {
             stakpak_shared::models::integrations::openai::MessageContent::Array(parts) => parts
                 .iter()
                 .filter_map(|part| part.text.as_ref())
-                .map(|text| text.as_str())
+                .map(std::string::String::as_str)
                 .filter(|text| !text.starts_with("<checkpoint_id>"))
                 .collect::<Vec<&str>>()
                 .join("\n"),
@@ -308,7 +306,7 @@ impl OutputRenderer {
             "┌─ Final Agent Response ──────────────────────────────────────────────────────────\n{}\n└─────────────────────────────────────────────────────────────────────────────────\n",
             formatted_content
                 .lines()
-                .map(|line| format!("│ {}", line))
+                .map(|line| format!("│ {line}"))
                 .collect::<Vec<_>>()
                 .join("\n")
         )
@@ -321,8 +319,8 @@ impl OutputRenderer {
         let tags_to_handle = ["reasoning", "report", "todo"];
 
         for tag in &tags_to_handle {
-            let start_tag = format!("<{}>", tag);
-            let end_tag = format!("</{}>", tag);
+            let start_tag = format!("<{tag}>");
+            let end_tag = format!("</{tag}>");
 
             while let Some(start_pos) = result.find(&start_tag) {
                 if let Some(relative_end_pos) = result[start_pos..].find(&end_tag) {
@@ -331,7 +329,12 @@ impl OutputRenderer {
                     let tag_content = result[content_start..actual_end_pos].trim();
                     let full_end_pos = actual_end_pos + end_tag.len();
 
-                    if !tag_content.is_empty() {
+                    if tag_content.is_empty() {
+                        // If empty content, just remove the tags by reconstructing without them
+                        let before = &result[..start_pos];
+                        let after = &result[full_end_pos..];
+                        result = format!("{before}{after}");
+                    } else {
                         // Wrap content to 76 characters (leaving room for "│ " prefix)
                         let wrapped_lines = self.wrap_text(tag_content, 76);
 
@@ -349,7 +352,7 @@ impl OutputRenderer {
                         let box_width = std::cmp::max(min_header_width, content_width).max(20);
 
                         // Create header: ┌─ TAG ─────────────┐
-                        let tag_part = format!("─ {} ", tag_name);
+                        let tag_part = format!("─ {tag_name} ");
                         let remaining_width = box_width - 2; // Subtract "┌" and "┐"
                         let padding_width =
                             remaining_width.saturating_sub(tag_part.chars().count());
@@ -362,22 +365,17 @@ impl OutputRenderer {
                             .map(|line| {
                                 let padding =
                                     " ".repeat(box_width.saturating_sub(line.chars().count() + 4));
-                                format!("│ {}{} │", line, padding)
+                                format!("│ {line}{padding} │")
                             })
                             .collect::<Vec<_>>()
                             .join("\n");
 
-                        let box_content = format!("{}\n{}\n{}", header, content_lines, footer);
+                        let box_content = format!("{header}\n{content_lines}\n{footer}");
 
                         // Replace by reconstructing the string with before + replacement + after
                         let before = &result[..start_pos];
                         let after = &result[full_end_pos..];
-                        result = format!("{}{}{}", before, box_content, after);
-                    } else {
-                        // If empty content, just remove the tags by reconstructing without them
-                        let before = &result[..start_pos];
-                        let after = &result[full_end_pos..];
-                        result = format!("{}{}", before, after);
+                        result = format!("{before}{box_content}{after}");
                     }
                 } else {
                     break; // No matching end tag found
@@ -455,7 +453,7 @@ impl OutputRenderer {
             let mins = total_minutes % 60;
             output.push_str(&format!(
                 "{}\n\n",
-                format!("You just saved {}h {}m of work!", hours, mins)
+                format!("You just saved {hours}h {mins}m of work!")
                     .with(Color::Cyan)
                     .bold()
             ));
@@ -463,8 +461,7 @@ impl OutputRenderer {
             output.push_str(&format!(
                 "{}\n\n",
                 format!(
-                    "You just saved {}m {}s of work!",
-                    total_minutes, remaining_seconds
+                    "You just saved {total_minutes}m {remaining_seconds}s of work!"
                 )
                 .with(Color::Cyan)
                 .bold()
@@ -495,9 +492,9 @@ impl OutputRenderer {
                 let remaining_secs = saved_seconds % 60;
 
                 let time_display = if saved_minutes > 0 {
-                    format!("{}m {}s", saved_minutes, remaining_secs)
+                    format!("{saved_minutes}m {remaining_secs}s")
                 } else {
-                    format!("{}s", remaining_secs)
+                    format!("{remaining_secs}s")
                 };
 
                 let bullet = match i {
@@ -519,14 +516,15 @@ impl OutputRenderer {
         }
 
         // Motivational ROI message
-        let daily_estimate = (total_seconds as f64 / 3600.0) * 3.0; // Assume 3 sessions per day
+        let daily_estimate = (f64::from(total_seconds) / 3600.0) * 3.0; // Assume 3 sessions per day
         let weekly_estimate = daily_estimate * 5.0;
 
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         if weekly_estimate >= 1.0 {
             output.push_str(&format!(
                 "At this pace, you could save {} per week!\n",
                 format!("{}h", (weekly_estimate as u32))
-                    .to_string()
+
                     .with(Color::Magenta)
                     .bold()
             ));
@@ -534,7 +532,7 @@ impl OutputRenderer {
             let weekly_minutes = (weekly_estimate * 60.0) as u32;
             output.push_str(&format!(
                 "At this pace, you could save {} per week!\n",
-                format!("{}m", weekly_minutes).with(Color::Magenta).bold()
+                format!("{weekly_minutes}m").with(Color::Magenta).bold()
             ));
         }
 

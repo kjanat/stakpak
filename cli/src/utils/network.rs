@@ -8,14 +8,14 @@ const MAX_EPHEMERAL_PORT: u16 = 65535;
 const MAX_ATTEMPTS: u32 = 100;
 
 /// Finds an available port using random selection to minimize collisions.
-/// Returns a bound TcpListener that the caller must use immediately to avoid races.
+/// Returns a bound `TcpListener` that the caller must use immediately to avoid races.
 async fn find_available_port_with_listener(host: &str) -> Result<(TcpListener, u16), String> {
     let mut rng = rand::rng();
 
     for _attempt in 0..MAX_ATTEMPTS {
         // Use random port selection to minimize collision probability
         let port = rng.random_range(MIN_EPHEMERAL_PORT..=MAX_EPHEMERAL_PORT);
-        let addr = format!("{}:{}", host, port);
+        let addr = format!("{host}:{port}");
 
         match TcpListener::bind(&addr).await {
             Ok(listener) => {
@@ -23,27 +23,22 @@ async fn find_available_port_with_listener(host: &str) -> Result<(TcpListener, u
             }
             Err(_) => {
                 // Port is in use, try another random port
-                continue;
             }
         }
     }
 
     Err(format!(
-        "Failed to find available port after {} attempts in range {}-{}",
-        MAX_ATTEMPTS, MIN_EPHEMERAL_PORT, MAX_EPHEMERAL_PORT
+        "Failed to find available port after {MAX_ATTEMPTS} attempts in range {MIN_EPHEMERAL_PORT}-{MAX_EPHEMERAL_PORT}"
     ))
 }
 
-/// Returns a bind address string and a bound TcpListener to prevent race conditions.
+/// Returns a bind address string and a bound `TcpListener` to prevent race conditions.
 /// The caller must use the listener immediately to start their server.
 pub async fn find_available_bind_address_with_listener() -> Result<(String, TcpListener), String> {
-    let host = match detect_container_environment() {
-        true => "0.0.0.0",
-        false => "127.0.0.1", // Force IPv4 to avoid IPv6 TLS issues
-    };
+    let host = if detect_container_environment() { "0.0.0.0" } else { "127.0.0.1" };
 
     let (listener, port) = find_available_port_with_listener(host).await?;
-    let bind_address = format!("{}:{}", host, port);
+    let bind_address = format!("{host}:{port}");
 
     Ok((bind_address, listener))
 }
