@@ -1863,6 +1863,7 @@ fn handle_input_submitted(
         let max_tokens = match state.model {
             AgentModel::Eco => CONTEXT_MAX_UTIL_TOKENS_ECO,
             AgentModel::Smart => CONTEXT_MAX_UTIL_TOKENS,
+            AgentModel::Opus => CONTEXT_MAX_UTIL_TOKENS_ECO,
         };
 
         let capped_tokens = state.total_session_usage.total_tokens.min(max_tokens);
@@ -2787,6 +2788,10 @@ fn execute_command_palette_selection(
 
 fn switch_model(state: &mut AppState) -> Result<(), String> {
     match state.model {
+        AgentModel::Opus => {
+            state.model = AgentModel::Smart;
+            Ok(())
+        }
         AgentModel::Smart => {
             if state.current_message_usage.total_tokens < CONTEXT_MAX_UTIL_TOKENS_ECO {
                 state.model = AgentModel::Eco;
@@ -2799,7 +2804,7 @@ fn switch_model(state: &mut AppState) -> Result<(), String> {
             }
         }
         AgentModel::Eco => {
-            state.model = AgentModel::Smart;
+            state.model = AgentModel::Opus;
             Ok(())
         }
     }

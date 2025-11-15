@@ -267,6 +267,7 @@ impl AnthropicClient {
 
     fn map_model_to_anthropic(model: &AgentModel) -> String {
         match model {
+            AgentModel::Opus => "claude-opus-4-20250514".to_string(),
             AgentModel::Smart => "claude-sonnet-4-20250514".to_string(),
             AgentModel::Eco => "claude-haiku-4-20250605".to_string(),
         }
@@ -437,6 +438,7 @@ impl AnthropicClient {
                 .unwrap_or_default()
                 .as_secs(),
             model: match response.model.as_str() {
+                m if m.contains("opus") => AgentModel::Opus,
                 m if m.contains("sonnet") => AgentModel::Smart,
                 m if m.contains("haiku") => AgentModel::Eco,
                 _ => AgentModel::Smart,

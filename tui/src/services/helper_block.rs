@@ -249,6 +249,9 @@ pub fn push_model_message(state: &mut AppState) {
         Style::default().fg(Color::DarkGray),
     ));
     match state.model {
+        AgentModel::Opus => {
+            line.push(Span::styled("opus", Style::default().fg(Color::Magenta)));
+        }
         AgentModel::Smart => {
             line.push(Span::styled("smart", Style::default().fg(Color::Cyan)));
         }

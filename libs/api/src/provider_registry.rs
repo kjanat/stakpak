@@ -71,16 +71,22 @@ pub fn get_provider_info(provider: &LLMProvider) -> ProviderInfo {
             display_name: "Anthropic".to_string(),
             models: vec![
                 ModelInfo {
+                    agent_model: AgentModel::Opus,
+                    display_name: "Claude Opus 4".to_string(),
+                    api_model_id: "claude-opus-4-20250514".to_string(),
+                    description: "Most capable model for complex tasks".to_string(),
+                },
+                ModelInfo {
                     agent_model: AgentModel::Smart,
-                    display_name: "smart".to_string(),
+                    display_name: "Claude Sonnet 4".to_string(),
                     api_model_id: "claude-sonnet-4-20250514".to_string(),
-                    description: "Claude Sonnet 4 - Balanced performance".to_string(),
+                    description: "Balanced performance and speed".to_string(),
                 },
                 ModelInfo {
                     agent_model: AgentModel::Eco,
-                    display_name: "eco".to_string(),
+                    display_name: "Claude Haiku 4".to_string(),
                     api_model_id: "claude-haiku-4-20250605".to_string(),
-                    description: "Claude Haiku 4 - Fast and efficient".to_string(),
+                    description: "Fast and efficient for simple tasks".to_string(),
                 },
             ],
         },

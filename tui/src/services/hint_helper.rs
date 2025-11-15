@@ -126,6 +126,9 @@ pub fn render_hint_or_shortcuts(f: &mut Frame, state: &AppState, area: Rect) {
             } else {
                 spans.push(Span::styled("model ", Style::default().fg(Color::DarkGray)));
                 match state.model {
+                    AgentModel::Opus => {
+                        spans.push(Span::styled("opus", Style::default().fg(Color::Magenta)));
+                    }
                     AgentModel::Smart => {
                         spans.push(Span::styled("smart", Style::default().fg(Color::Cyan)));
                     }

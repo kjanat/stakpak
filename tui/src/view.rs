@@ -408,6 +408,7 @@ fn render_loading_indicator(f: &mut Frame, state: &mut AppState, area: Rect) {
             let max_tokens = match state.model {
                 AgentModel::Eco => CONTEXT_MAX_UTIL_TOKENS_ECO,
                 AgentModel::Smart => CONTEXT_MAX_UTIL_TOKENS,
+                AgentModel::Opus => CONTEXT_MAX_UTIL_TOKENS_ECO,
             };
 
             let capped_tokens = used_context.total_tokens.min(max_tokens);
