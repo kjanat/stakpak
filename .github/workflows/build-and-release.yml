@@ -174,12 +174,12 @@ jobs:
 
   homebrew:
     needs: release
-    if: startsWith(github.ref, 'refs/tags/')
+    if: false #startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: stakpak/homebrew-stakpak
+          repository: ${{ github.repository_owner }}/homebrew-stakpak
           token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
       - name: Update Homebrew formula
@@ -200,7 +200,7 @@ jobs:
           cat > stakpak.rb << EOF
           class Stakpak < Formula
             desc "Stakpak CLI tool"
-            homepage "https://github.com/stakpak/stakpak"
+            homepage "https://github.com/${{ github.repository }}"
             version "${VERSION}"
             
             on_macos do
