@@ -98,6 +98,13 @@ impl Client {
     }
 
     pub fn new(config: &ClientConfig) -> Result<Self, String> {
+        // Validate API endpoint security
+        if config.api_endpoint.starts_with("http://")
+            && !config.api_endpoint.contains("localhost")
+            && !config.api_endpoint.contains("127.0.0.1") {
+            eprintln!("WARNING: API endpoint uses HTTP instead of HTTPS. Sensitive data may be transmitted in cleartext.");
+        }
+
         // Determine which provider to use
         let provider = config.provider.clone().unwrap_or_else(|| {
             if config.anthropic_oauth.is_some() || config.anthropic_api_key.is_some() {
