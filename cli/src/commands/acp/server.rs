@@ -63,10 +63,15 @@ impl StakpakAcpAgent {
     ) -> Result<Self, String> {
         let api_config: ClientConfig = config.clone().into();
 
-        // If no API key, create a dummy client that will fail on first use
+        // Check if we have ANY valid credentials (Stakpak, Anthropic API key, or Anthropic OAuth)
+        let has_credentials = api_config.api_key.is_some()
+            || api_config.anthropic_api_key.is_some()
+            || api_config.anthropic_oauth.is_some();
+
+        // If no credentials at all, create a dummy client that will fail on first use
         // The user will be prompted during authenticate/new_session
-        let client = if api_config.api_key.is_none() {
-            log::warn!("No API key found. User will be prompted to authenticate.");
+        let client = if !has_credentials {
+            log::warn!("No credentials found. User will be prompted to authenticate.");
             // Create a dummy client that will fail gracefully
             Client::new(&ClientConfig {
                 api_key: Some("dummy_for_initialization".to_string()),
@@ -77,6 +82,7 @@ impl StakpakAcpAgent {
             })
             .map_err(|e| format!("Failed to create client: {}", e))?
         } else {
+            // Use the actual config which may have Anthropic-only credentials
             Client::new(&api_config).map_err(|e| format!("Failed to create client: {}", e))?
         };
 
@@ -128,6 +134,13 @@ impl StakpakAcpAgent {
             streaming_buffer: Arc::new(tokio::sync::Mutex::new(String::new())),
             fs_operation_tx: None,
         })
+    }
+
+    /// Check if any valid credentials are available (Stakpak, Anthropic API key, or Anthropic OAuth)
+    fn has_valid_credentials(&self) -> bool {
+        self.config.api_key.is_some()
+            || self.config.anthropic_api_key.is_some()
+            || self.config.anthropic_oauth.is_some()
     }
 
     // Helper method to send proper ACP tool call notifications
@@ -1610,12 +1623,12 @@ impl acp::Agent for StakpakAcpAgent {
     ) -> Result<acp::InitializeResponse, acp::Error> {
         log::info!("Received initialize request {args:?}");
 
-        // If no API key, provide an auth method that links to GitHub
-        let auth_methods = if self.config.api_key.is_none() {
+        // Only show auth methods if NO credentials are available
+        let auth_methods = if !self.has_valid_credentials() {
             vec![acp::AuthMethod {
                 id: acp::AuthMethodId("github".into()),
-                name: "Use STAKPAK_API_KEY".to_string(),
-                description: Some("Required setting `STAKPAK_API_KEY` in your environment. Get your API key from https://stakpak.dev".to_string()),
+                name: "Use STAKPAK_API_KEY or Anthropic".to_string(),
+                description: Some("Set STAKPAK_API_KEY (get from https://stakpak.dev) or ANTHROPIC_API_KEY, or run 'stakpak auth login anthropic'".to_string()),
                 meta: None,
             }]
         } else {
@@ -1679,11 +1692,11 @@ impl acp::Agent for StakpakAcpAgent {
             }
         }
 
-        // Check if we have a valid API key
-        if self.config.api_key.is_none() {
-            log::error!("API key is missing - authentication required");
+        // Check if we have ANY valid credentials (Stakpak, Anthropic API key, or Anthropic OAuth)
+        if !self.has_valid_credentials() {
+            log::error!("No valid credentials found - authentication required");
             return Err(acp::Error::auth_required().with_data(serde_json::Value::String(
-                "Authentication required. Please visit https://github.com/stakpak/zed-stakpak-agent-server for more information.".to_string()
+                "Authentication required. Please set STAKPAK_API_KEY, ANTHROPIC_API_KEY, or run 'stakpak auth login anthropic'. Visit https://github.com/stakpak/zed-stakpak-agent-server for more information.".to_string()
             )));
         }
 
@@ -1696,11 +1709,11 @@ impl acp::Agent for StakpakAcpAgent {
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         log::info!("Received new session request {args:?}");
 
-        // Check if we have a valid API key
-        if self.config.api_key.is_none() {
-            log::error!("API key is missing - authentication required");
+        // Check if we have ANY valid credentials (Stakpak, Anthropic API key, or Anthropic OAuth)
+        if !self.has_valid_credentials() {
+            log::error!("No valid credentials found - authentication required");
             return Err(acp::Error::auth_required().with_data(serde_json::Value::String(
-                "Authentication required. Please visit https://github.com/stakpak/agent for more information.".to_string()
+                "Authentication required. Please set STAKPAK_API_KEY, ANTHROPIC_API_KEY, or run 'stakpak auth login anthropic'. Visit https://github.com/stakpak/agent for more information.".to_string()
             )));
         }
 
