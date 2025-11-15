@@ -1,76 +1,55 @@
 [workspace]
 resolver = "2"
 members = [
-    "cli",
-    "tui",
-    "libs/shared",
-    "libs/api",
-    "libs/mcp/client",
-    "libs/mcp/server",
+  "cli",
+  "libs/api",
+  "libs/mcp/client",
+  "libs/mcp/server",
+  "libs/shared",
+  "tui",
 ]
 default-members = ["cli"]
-
 
 [workspace.package]
 version = "0.2.76"
 edition = "2024"
 
-
 [workspace.dependencies]
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.133"
-uuid = { version = "1.10.0", features = ["serde", "v4"] }
-tokio = { version = "1", features = ["full"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 anyhow = "1.0.98"
-rmcp = { version = "0.8.3", features = [
-    "base64",
-    "macros",
-    "client",
-    "server",
-    "reqwest",
-    "transport-io",
-    "transport-child-process",
-    "transport-streamable-http-client",
-    "transport-streamable-http-client-reqwest",
-    "transport-streamable-http-server",
-    "transport-streamable-http-server-session",
-    "transport-worker",
-], default-features = false }
+async-trait = "0.1"
+axum-server = { version = "0.7.2", features = ["tls-rustls"] }
+base64 = "0.22"
+chrono = { version = "0.4.38", features = ["serde"] }
+crossterm = "0.29"
 futures = "0.3.31"
 futures-util = "0.3.31"
-regex = "1.11.1"
-chrono = { version = "0.4.38", features = ["serde"] }
-reqwest = { version = "=0.12.15", features = [
-    "json",
-    "stream",
-    "rustls-tls",
-], default-features = false }
-ratatui = { version = "0.29.0", features = [
-    "scrolling-regions",
-    "unstable-rendered-line-info",
-    "unstable-widget-ref",
-] }
-toml = "0.8.0"
-rand = "0.9.1"
-walkdir = "2.0.0"
 notify = "8.0.0"
-thiserror = "2.0.12"
-rustls = "0.23.29"
-rcgen = "0.12.1"
-rustls-pemfile = "2.1.2"
-tokio-rustls = "0.26.0"
-axum-server = { version = "0.7.2", features = ["tls-rustls"] }
-time = { version = "0.3", features = ["macros"] }
-rustls-platform-verifier = "0.5"
-crossterm = "0.29"
-tempfile = "3.0"
-similar = { version = "2.7.0", features = ["inline"] }
-async-trait = "0.1"
 open = "5.3.2"
+rand = "0.9.1"
+ratatui = { version = "0.29.0", features = ["scrolling-regions", "unstable-rendered-line-info", "unstable-widget-ref"] }
+rcgen = "0.12.1"
+regex = "1.11.1"
+reqwest = { version = "=0.12.15", default-features = false, features = ["json", "rustls-tls", "stream"] }
+rmcp = { version = "0.8.3", default-features = false, features = ["base64", "client", "macros", "reqwest", "server", "transport-child-process", "transport-io", "transport-streamable-http-client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server", "transport-streamable-http-server-session", "transport-worker"] }
+rustls = "0.23.29"
+rustls-pemfile = "2.1.2"
+rustls-platform-verifier = "0.5"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
+sha2 = "0.10"
+similar = { version = "2.7.0", features = ["inline"] }
+tempfile = "3.0"
+thiserror = "2.0.12"
+time = { version = "0.3", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.26.0"
+toml = "0.8.0"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+uuid = { version = "1.10.0", features = ["serde", "v4"] }
+walkdir = "2.0.0"
 
 # Required nightly
 [workspace.lints.clippy]
-unwrap_used = "deny"
 expect_used = "deny"
+unwrap_used = "deny"

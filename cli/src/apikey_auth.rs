@@ -7,7 +7,7 @@ const GENERATE_API_KEY_URL: &str = "https://stakpak.dev/generate-api-keys";
 
 fn open_browser(url: &str) -> bool {
     match open::that(url) {
-        Ok(_) => {
+        Ok(()) => {
             println!("🌐 Opening browser...");
             true
         }
@@ -23,27 +23,20 @@ async fn listen_for_callback(url: &str) -> String {
 
         match response {
             Ok(resp) if resp.status().is_success() => {
-                let response_text = match resp.text().await {
-                    Ok(text) => text,
-                    Err(_) => {
-                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                        continue;
-                    }
+                let Ok(response_text) = resp.text().await else {
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    continue;
                 };
                 if response_text.contains("stkpk_api") && response_text.contains("success") {
-                    let json: serde_json::Value = match serde_json::from_str(&response_text) {
-                        Ok(json) => json,
-                        Err(_) => {
-                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                            continue;
-                        }
+                    let json: serde_json::Value = if let Ok(json) = serde_json::from_str(&response_text) { json } else {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        continue;
                     };
                     return json["key"].to_string();
                 } else if response_text.contains("ERROR") {
                     return "ERROR".to_string();
-                } else {
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 }
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
             _ => {
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -70,7 +63,7 @@ fn success_message() {
 fn clear_terminal() {
     print!("\x1b[2J\x1b[H");
     if let Err(e) = std::io::stdout().flush() {
-        eprintln!("Failed to clear terminal: {}", e);
+        eprintln!("Failed to clear terminal: {e}");
     }
 }
 
@@ -84,7 +77,7 @@ async fn render_and_save_api_key(api_key: &str, config: &mut AppConfig) {
     config.api_key = Some(api_key.trim().to_string());
 
     if let Err(e) = config.save() {
-        eprintln!("Failed to save config: {}", e);
+        eprintln!("Failed to save config: {e}");
         std::process::exit(1);
     }
 
@@ -108,10 +101,10 @@ async fn start_callback_server() -> (
     let mut listener: Option<tokio::net::TcpListener> = None;
 
     while port < 5279 {
-        match TcpListener::bind(format!("127.0.0.1:{}", port)).await {
+        match TcpListener::bind(format!("127.0.0.1:{port}")).await {
             Ok(l) => {
                 listener = Some(l);
-                println!("Callback server listening on http://localhost:{}", port);
+                println!("Callback server listening on http://localhost:{port}");
                 break;
             }
             Err(_) => {
@@ -120,17 +113,14 @@ async fn start_callback_server() -> (
         }
     }
 
-    let listener = match listener {
-        Some(l) => l,
-        None => {
-            port_error = true;
-            return (
-                0,
-                mpsc::channel::<String>(100).1,
-                tokio::spawn(async {}),
-                port_error,
-            );
-        }
+    let Some(listener) = listener else {
+        port_error = true;
+        return (
+            0,
+            mpsc::channel::<String>(100).1,
+            tokio::spawn(async {}),
+            port_error,
+        );
     };
 
     // Create a channel for communication between server and terminal
@@ -145,10 +135,7 @@ async fn start_callback_server() -> (
 
                     // Read the HTTP request
                     let mut buffer = [0; 2048]; // Increased buffer for POST data
-                    let n = match socket.read(&mut buffer).await {
-                        Ok(n) => n,
-                        Err(_) => continue,
-                    };
+                    let Ok(n) = socket.read(&mut buffer).await else { continue };
 
                     let request = String::from_utf8_lossy(&buffer[..n]);
                     // let first_line = request.lines().next().unwrap_or("Unknown");
@@ -167,12 +154,11 @@ async fn start_callback_server() -> (
 
                             // Server has done its job, break out of the loop
                             break;
-                        } else {
-                            // Send error response with CORS headers
-                            let response = "HTTP/1.1 400 Bad Request\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Type: text/plain\r\n\r\nInvalid API key";
-                            socket.write_all(response.as_bytes()).await.ok();
-                            println!("❌ Invalid API key format in POST data");
                         }
+                        // Send error response with CORS headers
+                        let response = "HTTP/1.1 400 Bad Request\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Type: text/plain\r\n\r\nInvalid API key";
+                        socket.write_all(response.as_bytes()).await.ok();
+                        println!("❌ Invalid API key format in POST data");
                     } else if request.contains("OPTIONS") {
                         // Handle CORS preflight request
                         let response = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: 0\r\n\r\n";
@@ -184,8 +170,7 @@ async fn start_callback_server() -> (
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error accepting connection: {}", e);
-                    continue;
+                    eprintln!("Error accepting connection: {e}");
                 }
             }
         }
@@ -236,10 +221,9 @@ fn extract_api_key_from_post_body(request: &str) -> Option<String> {
 pub async fn prompt_for_api_key(config: &mut AppConfig) {
     let (port, mut api_key_receiver, server_handle, port_error) = start_callback_server().await;
 
-    let redirect_uri = format!("http://localhost:{}", port);
+    let redirect_uri = format!("http://localhost:{port}");
     let base_url = format!(
-        "{}?redirect=true&response_type=code&client_id={}&redirect_uri={}",
-        GENERATE_API_KEY_URL, CLIENT_ID, redirect_uri
+        "{GENERATE_API_KEY_URL}?redirect=true&response_type=code&client_id={CLIENT_ID}&redirect_uri={redirect_uri}"
     );
 
     println!();
@@ -252,7 +236,7 @@ pub async fn prompt_for_api_key(config: &mut AppConfig) {
     println!();
     println!("\x1b[1;34mUse the link below to authorize or paste your key directly\x1b[0m");
     println!();
-    println!("{}", base_url);
+    println!("{base_url}");
     println!();
     println!("─────────────────────────────────────────────────────────────────────────────");
     println!();
@@ -274,7 +258,7 @@ pub async fn prompt_for_api_key(config: &mut AppConfig) {
     println!();
     print!("\x1b[1;34mPaste\x1b[0m your key here: ");
     if let Err(e) = std::io::stdout().flush() {
-        eprintln!("Failed to flush stdout: {}", e);
+        eprintln!("Failed to flush stdout: {e}");
         std::process::exit(1);
     }
     println!();
@@ -285,13 +269,15 @@ pub async fn prompt_for_api_key(config: &mut AppConfig) {
         let read_res = tokio::task::spawn_blocking(rpassword::read_password).await;
         let _ = match read_res {
             Ok(Ok(key)) => manual_tx.send(Ok(key)).await,
-            Ok(Err(e)) => manual_tx.send(Err(format!("{}", e))).await,
-            Err(e) => manual_tx.send(Err(format!("{}", e))).await,
+            Ok(Err(e)) => manual_tx.send(Err(format!("{e}"))).await,
+            Err(e) => manual_tx.send(Err(format!("{e}"))).await,
         };
     });
 
     let mut callback_rx_option = None;
-    let callback_handle_option = if !port_error {
+    let callback_handle_option = if port_error {
+        None
+    } else {
         let (callback_tx, callback_rx) = mpsc::channel::<String>(1);
         let url_clone = base_url.clone();
         let handle = tokio::spawn(async move {
@@ -300,8 +286,6 @@ pub async fn prompt_for_api_key(config: &mut AppConfig) {
         });
         callback_rx_option = Some(callback_rx);
         Some(handle)
-    } else {
-        None
     };
 
     let timeout = tokio::time::sleep(std::time::Duration::from_secs(120));
@@ -321,7 +305,7 @@ pub async fn prompt_for_api_key(config: &mut AppConfig) {
                         break Some(key);
                     }
                     Err(err) => {
-                        eprintln!("\nFailed to read API key: {}", err);
+                        eprintln!("\nFailed to read API key: {err}");
                         std::process::exit(1);
                     }
                 }
@@ -353,7 +337,7 @@ pub async fn prompt_for_api_key(config: &mut AppConfig) {
                     }
                 }
             }
-            _ = &mut timeout, if !timeout_triggered => {
+            () = &mut timeout, if !timeout_triggered => {
                 timeout_triggered = true;
                 println!("\n⏳ Still waiting for browser authorization... paste the key here any time.");
             }

@@ -148,6 +148,8 @@ pub struct AppState {
     pub show_sessions_dialog: bool,
     pub session_selected: usize,
     pub account_info: String,
+    pub provider_name: String,
+    pub provider_auth_type: String,
     pub pending_bash_message_id: Option<Uuid>,
     pub streaming_tool_results: HashMap<Uuid, String>,
     pub streaming_tool_result_id: Option<Uuid>,
@@ -260,6 +262,7 @@ pub enum InputEvent {
     InputChanged(char),
     ShellMode,
     GetStatus(String),
+    SetProviderInfo(String, String), // (provider_name, auth_type)
     Error(String),
     SetSessions(Vec<SessionInfo>),
     InputBackspace,
@@ -370,9 +373,10 @@ pub enum OutputEvent {
     SendToolResult(ToolCallResult, bool, Vec<ToolCall>),
     ResumeSession,
     RequestProfileSwitch(String),
+    RequestProviderSwitch(String), // Switch provider (stakpak/anthropic)
     RequestRulebookUpdate(Vec<String>), // Selected rulebook URIs
-    RequestCurrentRulebooks,            // Request currently active rulebooks
-    RequestTotalUsage,                  // Request total accumulated token usage
+    RequestCurrentRulebooks,       // Request currently active rulebooks
+    RequestTotalUsage,             // Request total accumulated token usage
     SwitchModel(AgentModel),
 }
 
@@ -502,6 +506,8 @@ impl AppState {
             show_sessions_dialog: false,
             session_selected: 0,
             account_info: String::new(),
+            provider_name: String::new(),
+            provider_auth_type: String::new(),
             pending_bash_message_id: None,
             streaming_tool_results: HashMap::new(),
             streaming_tool_result_id: None,

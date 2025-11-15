@@ -58,7 +58,7 @@ impl LocalContext {
             if git_info.is_git_repo {
                 result.push_str("Git Repository: yes\n");
                 if let Some(branch) = &git_info.current_branch {
-                    result.push_str(&format!("Current Branch: {}\n", branch));
+                    result.push_str(&format!("Current Branch: {branch}\n"));
                 }
                 if let Some(has_changes) = git_info.has_uncommitted_changes {
                     result.push_str(&format!(
@@ -69,7 +69,7 @@ impl LocalContext {
                     result.push_str("Uncommitted Changes: no\n");
                 }
                 if let Some(remote) = &git_info.remote_url {
-                    result.push_str(&format!("Remote URL: {}\n", remote));
+                    result.push_str(&format!("Remote URL: {remote}\n"));
                 }
             } else {
                 result.push_str("Git Repository: no\n");
@@ -249,7 +249,7 @@ fn get_shell_type() -> String {
             if let Ok(output) = Command::new("which").arg(shell).output()
                 && output.status.success()
             {
-                return shell.to_string();
+                return (*shell).to_string();
             }
         }
 

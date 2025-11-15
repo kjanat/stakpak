@@ -65,7 +65,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
     });
 
     let protocol = if config.enable_mtls { "https" } else { "http" };
-    let local_mcp_server_host = format!("{}://{}", protocol, bind_address);
+    let local_mcp_server_host = format!("{protocol}://{bind_address}");
 
     let certificate_chain_for_server = certificate_chain.clone();
     let subagent_configs = config.subagent_configs.clone();
@@ -75,6 +75,9 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
                 api: ClientConfig {
                     api_key: ctx_clone.api_key.clone(),
                     api_endpoint: ctx_clone.api_endpoint.clone(),
+                    anthropic_api_key: ctx_clone.anthropic_api_key.clone(),
+                    anthropic_oauth: None,
+                    provider: None,
                 },
                 redact_secrets: config.redact_secrets,
                 privacy_mode: config.privacy_mode,
@@ -104,8 +107,10 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
     let client = Client::new(&ClientConfig {
         api_key: ctx.api_key.clone(),
         api_endpoint: ctx.api_endpoint.clone(),
-    })
-    .map_err(|e| e.to_string())?;
+        anthropic_api_key: ctx.anthropic_api_key.clone(),
+        anthropic_oauth: None,
+        provider: None,
+    })?;
 
     // Load checkpoint messages if provided
     if let Some(checkpoint_id) = config.checkpoint_id {
@@ -134,7 +139,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
         chat_messages.extend(checkpoint_messages);
         print!(
             "{}",
-            renderer.render_info(&format!("Resuming from checkpoint ({})", checkpoint_id))
+            renderer.render_info(&format!("Resuming from checkpoint ({checkpoint_id})"))
         );
     }
 
@@ -170,8 +175,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
             print!(
                 "{}",
                 renderer.render_warning(&format!(
-                    "Reached maximum steps limit ({}), stopping execution",
-                    max_steps
+                    "Reached maximum steps limit ({max_steps}), stopping execution"
                 ))
             );
             break;
@@ -185,8 +189,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
                 chat_messages.clone(),
                 Some(tools.clone()),
             )
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
         llm_response_time += llm_start.elapsed();
 
         chat_messages.push(response.choices[0].message.clone());
@@ -200,7 +203,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
         }
 
         let tool_calls = response.choices[0].message.tool_calls.as_ref();
-        let tool_count = tool_calls.map(|t| t.len()).unwrap_or(0);
+        let tool_count = tool_calls.map_or(0, std::vec::Vec::len);
 
         print!("{}", renderer.render_step_header(step, tool_count));
 
@@ -213,7 +216,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
                 stakpak_shared::models::integrations::openai::MessageContent::Array(parts) => parts
                     .iter()
                     .filter_map(|part| part.text.as_ref())
-                    .map(|text| text.as_str())
+                    .map(std::string::String::as_str)
                     .filter(|text| !text.starts_with("<checkpoint_id>"))
                     .collect::<Vec<&str>>()
                     .join("\n"),
@@ -310,7 +313,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
         .iter()
         .rev()
         .find(|m| m.role == stakpak_shared::models::integrations::openai::Role::Assistant)
-        .and_then(|m| m.content.as_ref().and_then(|c| c.extract_checkpoint_id()));
+        .and_then(|m| m.content.as_ref().and_then(stakpak_shared::models::integrations::openai::MessageContent::extract_checkpoint_id));
 
     let elapsed = start_time.elapsed();
     let tool_execution_time = elapsed.saturating_sub(llm_response_time);
@@ -368,7 +371,7 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
         Err(e) => {
             print!(
                 "{}",
-                renderer.render_error(&format!("Failed to save messages: {}", e))
+                renderer.render_error(&format!("Failed to save messages: {e}"))
             );
         }
     }
@@ -380,13 +383,13 @@ pub async fn run_async(ctx: AppConfig, config: RunAsyncConfig) -> Result<(), Str
                 print!(
                     "{}",
                     renderer
-                        .render_success(&format!("Checkpoint {} saved to {}", checkpoint_id, path))
+                        .render_success(&format!("Checkpoint {checkpoint_id} saved to {path}"))
                 );
             }
             Err(e) => {
                 print!(
                     "{}",
-                    renderer.render_error(&format!("Failed to save checkpoint: {}", e))
+                    renderer.render_error(&format!("Failed to save checkpoint: {e}"))
                 );
             }
         }

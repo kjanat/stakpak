@@ -16,8 +16,8 @@ pub async fn process_responses_stream(
     let mut stream = Box::pin(stream);
 
     let mut chat_completion_response = ChatCompletionResponse {
-        id: "".to_string(),
-        object: "".to_string(),
+        id: String::new(),
+        object: String::new(),
         created: 0,
         model: AgentModel::Smart,
         choices: vec![],
@@ -91,52 +91,49 @@ pub async fn process_responses_stream(
 
                         let tool_calls_vec = chat_message.tool_calls.as_mut();
                         if let Some(tool_calls_vec) = tool_calls_vec {
-                            match tool_calls_vec.get_mut(delta_tool_call.index) {
-                                Some(tool_call) => {
-                                    let delta_func = delta_tool_call.function.as_ref().unwrap_or(
-                                        &FunctionCallDelta {
-                                            name: None,
-                                            arguments: None,
-                                        },
-                                    );
-                                    tool_call.function.arguments =
-                                        tool_call.function.arguments.clone()
-                                            + delta_func.arguments.as_deref().unwrap_or("");
-                                }
-                                None => {
-                                    // push empty tool calls until the index is reached
-                                    tool_calls_vec.extend(
-                                        (tool_calls_vec.len()..delta_tool_call.index).map(|_| {
-                                            ToolCall {
-                                                id: "".to_string(),
-                                                r#type: "function".to_string(),
-                                                function: FunctionCall {
-                                                    name: "".to_string(),
-                                                    arguments: "".to_string(),
-                                                },
-                                            }
-                                        }),
-                                    );
+                            if let Some(tool_call) = tool_calls_vec.get_mut(delta_tool_call.index) {
+                                let delta_func = delta_tool_call.function.as_ref().unwrap_or(
+                                    &FunctionCallDelta {
+                                        name: None,
+                                        arguments: None,
+                                    },
+                                );
+                                tool_call.function.arguments =
+                                    tool_call.function.arguments.clone()
+                                        + delta_func.arguments.as_deref().unwrap_or("");
+                            } else {
+                                // push empty tool calls until the index is reached
+                                tool_calls_vec.extend(
+                                    (tool_calls_vec.len()..delta_tool_call.index).map(|_| {
+                                        ToolCall {
+                                            id: String::new(),
+                                            r#type: "function".to_string(),
+                                            function: FunctionCall {
+                                                name: String::new(),
+                                                arguments: String::new(),
+                                            },
+                                        }
+                                    }),
+                                );
 
-                                    tool_calls_vec.push(ToolCall {
-                                        id: delta_tool_call.id.clone().unwrap_or_default(),
-                                        r#type: "function".to_string(),
-                                        function: FunctionCall {
-                                            name: delta_tool_call
-                                                .function
-                                                .as_ref()
-                                                .unwrap_or(&FunctionCallDelta {
-                                                    name: None,
-                                                    arguments: None,
-                                                })
-                                                .name
-                                                .as_deref()
-                                                .unwrap_or("")
-                                                .to_string(),
-                                            arguments: "".to_string(),
-                                        },
-                                    });
-                                }
+                                tool_calls_vec.push(ToolCall {
+                                    id: delta_tool_call.id.clone().unwrap_or_default(),
+                                    r#type: "function".to_string(),
+                                    function: FunctionCall {
+                                        name: delta_tool_call
+                                            .function
+                                            .as_ref()
+                                            .unwrap_or(&FunctionCallDelta {
+                                                name: None,
+                                                arguments: None,
+                                            })
+                                            .name
+                                            .as_deref()
+                                            .unwrap_or("")
+                                            .to_string(),
+                                        arguments: String::new(),
+                                    },
+                                });
                             }
                         }
                     }

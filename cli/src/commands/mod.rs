@@ -12,6 +12,7 @@ use stakpak_mcp_server::{EnabledToolsConfig, MCPServerConfig, ToolMode, start_se
 
 pub mod acp;
 pub mod agent;
+pub mod auth;
 pub mod auto_update;
 pub mod warden;
 
@@ -26,7 +27,7 @@ struct RulebookFrontmatter {
 
 /// Parse rulebook metadata from markdown content with YAML frontmatter
 /// Expects frontmatter with uri, description, and tags
-/// Returns (uri, description, tags, content_without_frontmatter)
+/// Returns (uri, description, tags, `content_without_frontmatter`)
 fn parse_rulebook_metadata(content: &str) -> Result<(String, String, Vec<String>, String), String> {
     // Check if content starts with frontmatter (---)
     let content = content.trim_start();
@@ -44,7 +45,7 @@ fn parse_rulebook_metadata(content: &str) -> Result<(String, String, Vec<String>
 
     // Parse YAML frontmatter
     let frontmatter: RulebookFrontmatter = serde_yaml::from_str(frontmatter_yaml)
-        .map_err(|e| format!("Failed to parse YAML frontmatter: {}", e))?;
+        .map_err(|e| format!("Failed to parse YAML frontmatter: {e}"))?;
 
     // Extract content after frontmatter (skip the closing "---" and any leading whitespace)
     let content_body = rest[end_pos + 4..].trim_start().to_string();
@@ -57,7 +58,7 @@ fn parse_rulebook_metadata(content: &str) -> Result<(String, String, Vec<String>
     ))
 }
 
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, PartialEq, Eq)]
 pub enum ConfigCommands {
     /// Show current configuration
     Show,
@@ -65,7 +66,7 @@ pub enum ConfigCommands {
     Sample,
 }
 
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, PartialEq, Eq)]
 pub enum RulebookCommands {
     /// Get a specific rulebook or list all rulebooks
     Get {
@@ -84,7 +85,7 @@ pub enum RulebookCommands {
     },
 }
 
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, PartialEq, Eq)]
 pub enum Commands {
     /// Get CLI Version
     Version,
@@ -97,6 +98,10 @@ pub enum Commands {
 
     /// Logout from Stakpak
     Logout,
+
+    /// Authentication management (Anthropic OAuth, etc.)
+    #[command(subcommand)]
+    Auth(auth::AuthCommands),
 
     /// Start Agent Client Protocol server (for editor integration)
     ///
@@ -170,21 +175,22 @@ pub enum Commands {
 }
 
 impl Commands {
-    pub fn requires_auth(&self) -> bool {
+    pub const fn requires_auth(&self) -> bool {
         !matches!(
             self,
-            Commands::Login { .. }
-                | Commands::Logout
-                | Commands::Set { .. }
-                | Commands::Config(_)
-                | Commands::Version
-                | Commands::Update
-                | Commands::Acp { .. }
+            Self::Login { .. }
+                | Self::Logout
+                | Self::Auth(_)
+                | Self::Set { .. }
+                | Self::Config(_)
+                | Self::Version
+                | Self::Update
+                | Self::Acp { .. }
         )
     }
     pub async fn run(self, config: AppConfig) -> Result<(), String> {
         match self {
-            Commands::Mcp {
+            Self::Mcp {
                 disable_secret_redaction,
                 privacy_mode,
                 tool_mode,
@@ -228,27 +234,27 @@ impl Commands {
                     network::find_available_bind_address_with_listener().await?;
 
                 // Generate certificates if mTLS is enabled
-                let certificate_chain = if !disable_mcp_mtls {
+                let certificate_chain = if disable_mcp_mtls {
+                    None
+                } else {
                     match stakpak_shared::cert_utils::CertificateChain::generate() {
                         Ok(chain) => {
                             println!("🔐 mTLS enabled - generated certificate chain");
                             if let Ok(ca_pem) = chain.get_ca_cert_pem() {
                                 println!("📜 CA Certificate (copy this to your client):");
-                                println!("{}", ca_pem);
+                                println!("{ca_pem}");
                             }
                             Some(chain)
                         }
                         Err(e) => {
-                            eprintln!("Failed to generate certificate chain: {}", e);
+                            eprintln!("Failed to generate certificate chain: {e}");
                             std::process::exit(1);
                         }
                     }
-                } else {
-                    None
                 };
 
-                let protocol = if !disable_mcp_mtls { "https" } else { "http" };
-                println!("MCP server started at {}://{}/mcp", protocol, bind_address);
+                let protocol = if disable_mcp_mtls { "http" } else { "https" };
+                println!("MCP server started at {protocol}://{bind_address}/mcp");
 
                 start_server(
                     MCPServerConfig {
@@ -269,23 +275,27 @@ impl Commands {
                 .await
                 .map_err(|e| e.to_string())?;
             }
-            Commands::Login { api_key } => {
+            Self::Login { api_key } => {
                 let mut updated_config = config.clone();
                 updated_config.api_key = Some(api_key);
 
                 updated_config
                     .save()
-                    .map_err(|e| format!("Failed to save config: {}", e))?;
+                    .map_err(|e| format!("Failed to save config: {e}"))?;
             }
-            Commands::Logout => {
+            Self::Logout => {
                 let mut updated_config = config.clone();
                 updated_config.api_key = None;
 
                 updated_config
                     .save()
-                    .map_err(|e| format!("Failed to save config: {}", e))?;
+                    .map_err(|e| format!("Failed to save config: {e}"))?;
             }
-            Commands::Set {
+            Self::Auth(auth_cmd) => {
+                let mut updated_config = config.clone();
+                auth::handle_auth_command(auth_cmd, &mut updated_config).await?;
+            }
+            Self::Set {
                 machine_name,
                 auto_append_gitignore,
             } => {
@@ -295,19 +305,19 @@ impl Commands {
                 if let Some(name) = machine_name {
                     updated_config.machine_name = Some(name.clone());
                     config_updated = true;
-                    println!("Machine name set to: {}", name);
+                    println!("Machine name set to: {name}");
                 }
 
                 if let Some(append) = auto_append_gitignore {
                     updated_config.auto_append_gitignore = Some(append);
                     config_updated = true;
-                    println!("Auto-appending .stakpak to .gitignore: {}", append);
+                    println!("Auto-appending .stakpak to .gitignore: {append}");
                 }
 
                 if config_updated {
                     updated_config
                         .save()
-                        .map_err(|e| format!("Failed to save config: {}", e))?;
+                        .map_err(|e| format!("Failed to save config: {e}"))?;
                 } else {
                     println!("No configuration option provided. Available options:");
                     println!(
@@ -318,7 +328,7 @@ impl Commands {
                     );
                 }
             }
-            Commands::Config(config_command) => match config_command {
+            Self::Config(config_command) => match config_command {
                 ConfigCommands::Show => {
                     println!("Current configuration:");
                     println!("  Profile: {}", config.profile_name);
@@ -335,14 +345,14 @@ impl Commands {
                         Some(key) if !key.is_empty() => "***".to_string(),
                         _ => "(not set)".to_string(),
                     };
-                    println!("  API key: {}", api_key_display);
+                    println!("  API key: {api_key_display}");
                 }
                 ConfigCommands::Sample => {
                     print_sample_config();
                 }
             },
-            Commands::Rulebooks(rulebook_command) => {
-                let client = Client::new(&config.into()).map_err(|e| e.to_string())?;
+            Self::Rulebooks(rulebook_command) => {
+                let client = Client::new(&config.into())?;
                 match rulebook_command {
                     RulebookCommands::Get { uri } => {
                         if let Some(uri) = uri {
@@ -358,7 +368,7 @@ impl Commands {
 
                             // Serialize frontmatter to YAML
                             let yaml = serde_yaml::to_string(&frontmatter)
-                                .map_err(|e| format!("Failed to serialize frontmatter: {}", e))?;
+                                .map_err(|e| format!("Failed to serialize frontmatter: {e}"))?;
 
                             // Output in apply-compatible format with YAML frontmatter
                             println!("---");
@@ -384,7 +394,7 @@ impl Commands {
                     RulebookCommands::Apply { file_path } => {
                         // Read the markdown file
                         let content = std::fs::read_to_string(file_path)
-                            .map_err(|e| format!("Failed to read file: {}", e))?;
+                            .map_err(|e| format!("Failed to read file: {e}"))?;
 
                         // Parse frontmatter to extract metadata and content body
                         let (uri, description, tags, content_body) =
@@ -396,26 +406,26 @@ impl Commands {
                             .await?;
 
                         println!("✓ Rulebook created/updated successfully");
-                        println!("  URI: {}", uri);
+                        println!("  URI: {uri}");
                     }
                     RulebookCommands::Delete { uri } => {
                         client.delete_rulebook(&uri).await?;
-                        println!("✓ Rulebook deleted: {}", uri);
+                        println!("✓ Rulebook deleted: {uri}");
                     }
                 }
             }
-            Commands::Account => {
-                let client = Client::new(&(config.into())).map_err(|e| e.to_string())?;
+            Self::Account => {
+                let client = Client::new(&(config.into()))?;
                 let data = client.get_my_account().await?;
                 println!("{}", data.to_text());
             }
-            Commands::Version => {
+            Self::Version => {
                 println!(
                     "stakpak v{} (https://github.com/stakpak/agent)",
                     env!("CARGO_PKG_VERSION")
                 );
             }
-            Commands::Warden {
+            Self::Warden {
                 env,
                 volume,
                 command,
@@ -430,23 +440,21 @@ impl Commands {
                     }
                 }
             }
-            Commands::Update => {
+            Self::Update => {
                 auto_update::run_auto_update().await?;
             }
-            Commands::Acp { system_prompt_file } => {
+            Self::Acp { system_prompt_file } => {
                 let system_prompt = if let Some(system_prompt_file_path) = &system_prompt_file {
                     match std::fs::read_to_string(system_prompt_file_path) {
                         Ok(content) => {
                             println!(
-                                "📖 Reading system prompt from file: {}",
-                                system_prompt_file_path
+                                "📖 Reading system prompt from file: {system_prompt_file_path}"
                             );
                             Some(content.trim().to_string())
                         }
                         Err(e) => {
                             eprintln!(
-                                "Failed to read system prompt file '{}': {}",
-                                system_prompt_file_path, e
+                                "Failed to read system prompt file '{system_prompt_file_path}': {e}"
                             );
                             None
                         }
@@ -462,13 +470,13 @@ impl Commands {
                     {
                         Ok(agent) => agent,
                         Err(e) => {
-                            eprintln!("Failed to create ACP agent: {}", e);
+                            eprintln!("Failed to create ACP agent: {e}");
                             std::process::exit(1);
                         }
                     };
 
                 if let Err(e) = agent.run_stdio().await {
-                    eprintln!("ACP agent failed: {}", e);
+                    eprintln!("ACP agent failed: {e}");
                     std::process::exit(1);
                 }
             }

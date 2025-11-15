@@ -52,7 +52,7 @@ fn update_via_brew() -> Result<(), String> {
     let update_status = Command::new("brew")
         .arg("update")
         .status()
-        .map_err(|e| format!("Failed to run brew update: {}", e))?;
+        .map_err(|e| format!("Failed to run brew update: {e}"))?;
     if !update_status.success() {
         println!("brew update failed!");
     }
@@ -61,7 +61,7 @@ fn update_via_brew() -> Result<(), String> {
         .arg("upgrade")
         .arg("stakpak")
         .status()
-        .map_err(|e| format!("Failed to run brew upgrade: {}", e))?;
+        .map_err(|e| format!("Failed to run brew upgrade: {e}"))?;
     if upgrade_status.success() {
         println!("Update complete! Please restart the CLI to use the new version.");
         std::process::exit(0);
@@ -73,7 +73,7 @@ fn update_via_brew() -> Result<(), String> {
 fn is_current_binary_homebrew_managed() -> Result<bool, String> {
     // Get current executable path
     let current_exe =
-        env::current_exe().map_err(|e| format!("Failed to get current exe: {}", e))?;
+        env::current_exe().map_err(|e| format!("Failed to get current exe: {e}"))?;
 
     // Get Homebrew's stakpak path
     match Command::new("brew").arg("--prefix").arg("stakpak").output() {
@@ -108,7 +108,7 @@ fn is_current_binary_homebrew_managed() -> Result<bool, String> {
 
 fn get_binary_dir() -> Result<(PathBuf, PathBuf), String> {
     let binary_path =
-        env::current_exe().map_err(|e| format!("Failed to get current exe: {}", e))?;
+        env::current_exe().map_err(|e| format!("Failed to get current exe: {e}"))?;
     let binary_dir = match binary_path.parent() {
         Some(dir) => dir.to_path_buf(),
         None => Err("Failed to determine the directory of the current executable".to_string())?,
@@ -143,15 +143,15 @@ async fn download_and_extract_binary(config: &PluginConfig) -> Result<String, St
     let archive_bytes = response
         .bytes()
         .await
-        .map_err(|e| format!("Failed to read download response: {}", e))?;
+        .map_err(|e| format!("Failed to read download response: {e}"))?;
 
     // Create a temporary directory for extraction
     let temp_dir = binary_dir.join("temp_update");
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir)
-            .map_err(|e| format!("Failed to clean temp directory: {}", e))?;
+            .map_err(|e| format!("Failed to clean temp directory: {e}"))?;
     }
-    fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp directory: {}", e))?;
+    fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp directory: {e}"))?;
 
     // Extract the archive to temp directory
     if is_zip {
@@ -166,10 +166,10 @@ async fn download_and_extract_binary(config: &PluginConfig) -> Result<String, St
     // Copy to a permanent location before cleaning up temp_dir
     let permanent_extracted = binary_dir.join(format!("{}_downloaded", config.name));
     fs::copy(&extracted_binary, &permanent_extracted)
-        .map_err(|e| format!("Failed to copy extracted binary: {}", e))?;
+        .map_err(|e| format!("Failed to copy extracted binary: {e}"))?;
 
     // Clean up temp directory immediately
-    fs::remove_dir_all(&temp_dir).map_err(|e| format!("Failed to clean temp directory: {}", e))?;
+    fs::remove_dir_all(&temp_dir).map_err(|e| format!("Failed to clean temp directory: {e}"))?;
 
     Ok(permanent_extracted.to_string_lossy().to_string())
 }
@@ -200,8 +200,7 @@ fn find_extracted_binary(temp_dir: &PathBuf, binary_name: &str) -> Result<PathBu
 
     binary_path.ok_or_else(|| {
         format!(
-            "Could not find extracted binary '{}' in temp directory",
-            binary_name
+            "Could not find extracted binary '{binary_name}' in temp directory"
         )
     })
 }
@@ -211,7 +210,7 @@ fn search_for_binary(dir: &PathBuf, binary_name: &str) -> Result<Option<PathBuf>
         .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
         if path.is_file() {
@@ -234,7 +233,7 @@ fn search_for_binary(dir: &PathBuf, binary_name: &str) -> Result<Option<PathBuf>
 }
 
 async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> Result<(), String> {
-    println!("Starting atomic binary update for {} {}", os, arch);
+    println!("Starting atomic binary update for {os} {arch}");
 
     // 1. Set up PluginConfig for the CLI itself
     let cli_name = "stakpak";
@@ -248,7 +247,7 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
         ("macos", "aarch64") => "darwin-aarch64",
         ("windows", "x86_64") => "windows-x86_64",
         _ => {
-            return Err(format!("Unsupported platform: {} {}", os, arch));
+            return Err(format!("Unsupported platform: {os} {arch}"));
         }
     };
 
@@ -261,7 +260,7 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
 
     // 3. Get current executable path
     let current_exe =
-        env::current_exe().map_err(|e| format!("Failed to get current exe: {}", e))?;
+        env::current_exe().map_err(|e| format!("Failed to get current exe: {e}"))?;
 
     // 4. Create file paths for atomic update
     let temp_exe = current_exe.with_extension("new");
@@ -270,32 +269,32 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
     // Clean up any existing temp files
     if temp_exe.exists() {
         fs::remove_file(&temp_exe)
-            .map_err(|e| format!("Failed to clean existing temp file: {}", e))?;
+            .map_err(|e| format!("Failed to clean existing temp file: {e}"))?;
     }
     if backup_exe.exists() {
         fs::remove_file(&backup_exe)
-            .map_err(|e| format!("Failed to clean existing backup file: {}", e))?;
+            .map_err(|e| format!("Failed to clean existing backup file: {e}"))?;
     }
 
     // 5. Download and extract new binary
-    println!("Downloading new version {}...", version);
+    println!("Downloading new version {version}...");
     let extracted_binary_path = download_and_extract_binary(&config).await?;
 
     // 6. Copy extracted binary to temp location
     println!("Preparing new binary...");
     fs::copy(&extracted_binary_path, &temp_exe)
-        .map_err(|e| format!("Failed to copy extracted binary to temp location: {}", e))?;
+        .map_err(|e| format!("Failed to copy extracted binary to temp location: {e}"))?;
 
     // 7. Set executable permissions on temp file (Unix systems)
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let mut perms = fs::metadata(&temp_exe)
-            .map_err(|e| format!("Failed to get temp file metadata: {}", e))?
+            .map_err(|e| format!("Failed to get temp file metadata: {e}"))?
             .permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&temp_exe, perms)
-            .map_err(|e| format!("Failed to set executable permissions on temp file: {}", e))?;
+            .map_err(|e| format!("Failed to set executable permissions on temp file: {e}"))?;
     }
 
     // 8. Verify the new binary works - try multiple verification methods
@@ -338,8 +337,7 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
                     fs::remove_file(&temp_exe).ok();
                     fs::remove_file(&extracted_binary_path).ok();
                     return Err(format!(
-                        "Failed to run verification test on new binary: {}",
-                        e
+                        "Failed to run verification test on new binary: {e}"
                     ));
                 }
             }
@@ -355,7 +353,7 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
 
     // 9. Create backup of current executable
     println!("Creating backup of current executable...");
-    fs::copy(&current_exe, &backup_exe).map_err(|e| format!("Failed to create backup: {}", e))?;
+    fs::copy(&current_exe, &backup_exe).map_err(|e| format!("Failed to create backup: {e}"))?;
 
     // 10. Atomic replacement using rename
     println!("Performing atomic replacement...");
@@ -370,14 +368,13 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
             fs::remove_file(&extracted_binary_path).ok();
 
             println!(
-                "🎉 Update complete! Please restart the CLI to use version {}.",
-                version
+                "🎉 Update complete! Please restart the CLI to use version {version}."
             );
             std::process::exit(0);
         }
         Err(e) => {
             // Atomic rename failed, try to restore backup
-            println!("❌ Atomic replacement failed: {}", e);
+            println!("❌ Atomic replacement failed: {e}");
 
             if backup_exe.exists() {
                 println!("Attempting to restore backup...");
@@ -387,13 +384,12 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
                         fs::remove_file(&backup_exe).ok();
                     }
                     Err(restore_err) => {
-                        println!("❌ Failed to restore backup: {}", restore_err);
+                        println!("❌ Failed to restore backup: {restore_err}");
                         // Clean up temp files
                         fs::remove_file(&temp_exe).ok();
                         fs::remove_file(&extracted_binary_path).ok();
                         return Err(format!(
-                            "Critical error: Failed to replace executable AND failed to restore backup. Original error: {}, Restore error: {}",
-                            e, restore_err
+                            "Critical error: Failed to replace executable AND failed to restore backup. Original error: {e}, Restore error: {restore_err}"
                         ));
                     }
                 }
@@ -403,7 +399,7 @@ async fn update_binary_atomic(os: &str, arch: &str, version: Option<String>) -> 
             fs::remove_file(&temp_exe).ok();
             fs::remove_file(&extracted_binary_path).ok();
 
-            Err(format!("Failed to replace executable: {}", e))
+            Err(format!("Failed to replace executable: {e}"))
         }
     }
 }

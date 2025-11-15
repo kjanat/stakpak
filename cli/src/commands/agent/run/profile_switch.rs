@@ -15,7 +15,7 @@ pub async fn validate_profile_switch(
 ) -> Result<AppConfig, String> {
     // 1. Try to load the new profile config
     let mut new_config = AppConfig::load(new_profile, config_path)
-        .map_err(|e| format!("Failed to load profile '{}': {}", new_profile, e))?;
+        .map_err(|e| format!("Failed to load profile '{new_profile}': {e}"))?;
 
     // 2. Handle API key - inherit from default if not present
     if new_config.api_key.is_none() {
@@ -23,15 +23,14 @@ pub async fn validate_profile_switch(
             new_config.api_key = Some(default_key);
         } else {
             return Err(format!(
-                "Profile '{}' has no API key and no default key available",
-                new_profile
+                "Profile '{new_profile}' has no API key and no default key available"
             ));
         }
     }
 
     // 3. Test API key with retry logic
     let client = Client::new(&new_config.clone().into())
-        .map_err(|e| format!("Failed to create API client: {}", e))?;
+        .map_err(|e| format!("Failed to create API client: {e}"))?;
 
     let mut last_error = String::new();
     for attempt in 1..=MAX_RETRIES {
@@ -44,14 +43,13 @@ pub async fn validate_profile_switch(
                 last_error = e;
                 if attempt < MAX_RETRIES {
                     // Wait before retry (exponential backoff)
-                    tokio::time::sleep(Duration::from_secs(attempt as u64)).await;
+                    tokio::time::sleep(Duration::from_secs(u64::from(attempt))).await;
                 }
             }
         }
     }
 
     Err(format!(
-        "API validation failed after {} attempts: {}",
-        MAX_RETRIES, last_error
+        "API validation failed after {MAX_RETRIES} attempts: {last_error}"
     ))
 }

@@ -1,17 +1,23 @@
 [package]
 name = "stakpak-api"
 version = { workspace = true }
+categories = ["api-bindings", "asynchronous"]
 edition = "2024"
+keywords = ["anthropic", "api", "claude", "client", "openai"]
+license = "Apache-2.0"
+readme = "../../README.md"
+repository = "https://github.com/kjanat/stakpak"
+description = "API client library for Stakpak Agent with Anthropic Claude Code and OpenAI support"
 
 [dependencies]
-stakpak-shared = { path = "../../libs/shared" }
-serde = { workspace = true }
-serde_json = { workspace = true }
-uuid = { workspace = true }
-futures-util = { workspace = true }
 chrono = { workspace = true }
+eventsource-stream = "0.2.3"
+futures-util = { workspace = true }
 reqwest = { workspace = true }
 rmcp = { workspace = true }
-eventsource-stream = "0.2.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+stakpak-shared = { path = "../../libs/shared" }
 url = "2.5.0"
 urlencoding = "2.1"
+uuid = { workspace = true }

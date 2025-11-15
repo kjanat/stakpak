@@ -2,37 +2,36 @@
 name = "stakpak-tui"
 version = { workspace = true }
 edition = "2024"
+description = "Terminal UI library for Stakpak"
 
 [dependencies]
-stakpak-shared = { path = "../libs/shared" }
-stakpak-api = { path = "../libs/api" }
+ansi-to-tui = "7.0.0"
+chrono = "0.4"
+console = "0.15"
+crossterm = { workspace = true }
+ignore = "0.4.23"
+nucleo-matcher = "0.3.1"
+open = { workspace = true }
 popup-widget = { path = "../libs/popup-widget" }
+rand = "0.9"
+ratatui = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ratatui = { workspace = true }
+similar = { workspace = true }
+stakpak-api = { path = "../libs/api" }
+stakpak-shared = { path = "../libs/shared" }
+syntect = "5.2.0"
 tempfile = { workspace = true }
-rand = "0.9"
 textwrap = "0.16.2"
-unicode-segmentation = "1.12.0"
-crossterm = { workspace = true }
 tokio = { version = "1.39", features = ["full"] }
+unicode-segmentation = "1.12.0"
 unicode-width = "0.2.0"
 uuid = { workspace = true }
-chrono = "0.4"
-console = "0.15"
-ansi-to-tui = "7.0.0"
-similar = { workspace = true }
-syntect = "5.2.0"
-nucleo-matcher = "0.3.1"
-ignore = "0.4.23"
-open = { workspace = true }
-
-
-[lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-
 
 [target.'cfg(unix)'.dependencies]
 portable-pty = "0.8"
+
+[lints.clippy]
+expect_used = "deny"
+unwrap_used = "deny"

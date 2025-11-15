@@ -44,12 +44,11 @@ pub async fn get_plugin_path(config: PluginConfig) -> String {
     if let Ok(system_version) = get_version_from_command(&config.name, &config.name) {
         if is_same_version(&system_version, &target_version) {
             return config.name.clone();
-        } else {
-            println!(
-                "{} v{} is outdated (target: v{}), checking plugins directory...",
-                config.name, system_version, target_version
-            );
         }
+        println!(
+            "{} v{} is outdated (target: v{}), checking plugins directory...",
+            config.name, system_version, target_version
+        );
     }
 
     // Check if plugin already exists in plugins directory
@@ -58,12 +57,11 @@ pub async fn get_plugin_path(config: PluginConfig) -> String {
     {
         if is_same_version(&current_version, &target_version) {
             return existing_path;
-        } else {
-            println!(
-                "{} {} is outdated (target: v{}), updating...",
-                config.name, current_version, target_version
-            );
         }
+        println!(
+            "{} {} is outdated (target: v{}), updating...",
+            config.name, current_version, target_version
+        );
     }
 
     // Try to download and install the latest version
@@ -119,17 +117,17 @@ fn get_version_from_command(command: &str, display_name: &str) -> Result<String,
     let output = Command::new(command)
         .arg("version")
         .output()
-        .map_err(|e| format!("Failed to run {} version command: {}", display_name, e))?;
+        .map_err(|e| format!("Failed to run {display_name} version command: {e}"))?;
 
     if !output.status.success() {
-        return Err(format!("{} version command failed", display_name));
+        return Err(format!("{display_name} version command failed"));
     }
 
     let version_output = String::from_utf8_lossy(&output.stdout);
     let full_output = version_output.trim();
 
     if full_output.is_empty() {
-        return Err(format!("Could not determine {} version", display_name));
+        return Err(format!("Could not determine {display_name} version"));
     }
 
     // Extract version from output like "warden v0.1.7 (https://github.com/stakpak/agent)"
@@ -171,7 +169,7 @@ async fn get_latest_version(config: &PluginConfig) -> Result<String, String> {
     let version_text = response
         .text()
         .await
-        .map_err(|e| format!("Failed to read version response: {}", e))?;
+        .map_err(|e| format!("Failed to read version response: {e}"))?;
 
     Ok(version_text.trim().to_string())
 }
@@ -194,7 +192,7 @@ fn get_existing_plugin_path(plugin_name: &str) -> Result<String, String> {
 
     // Determine the expected binary name based on OS
     let binary_name = if cfg!(windows) {
-        format!("{}.exe", plugin_name)
+        format!("{plugin_name}.exe")
     } else {
         plugin_name.to_string()
     };
@@ -205,8 +203,7 @@ fn get_existing_plugin_path(plugin_name: &str) -> Result<String, String> {
         Ok(plugin_path.to_string_lossy().to_string())
     } else {
         Err(format!(
-            "{} binary not found in plugins directory",
-            plugin_name
+            "{plugin_name} binary not found in plugins directory"
         ))
     }
 }
@@ -221,7 +218,7 @@ async fn download_and_install_plugin(config: &PluginConfig) -> Result<String, St
 
     // Create directories if they don't exist
     fs::create_dir_all(&plugins_dir)
-        .map_err(|e| format!("Failed to create plugins directory: {}", e))?;
+        .map_err(|e| format!("Failed to create plugins directory: {e}"))?;
 
     // Determine the appropriate download URL based on OS and architecture
     let (download_url, binary_name, is_zip) = get_download_info(config)?;
@@ -249,7 +246,7 @@ async fn download_and_install_plugin(config: &PluginConfig) -> Result<String, St
     let archive_bytes = response
         .bytes()
         .await
-        .map_err(|e| format!("Failed to read download response: {}", e))?;
+        .map_err(|e| format!("Failed to read download response: {e}"))?;
 
     // Extract the archive
     if is_zip {
@@ -263,11 +260,11 @@ async fn download_and_install_plugin(config: &PluginConfig) -> Result<String, St
     {
         use std::os::unix::fs::PermissionsExt;
         let mut permissions = fs::metadata(&plugin_path)
-            .map_err(|e| format!("Failed to get file metadata: {}", e))?
+            .map_err(|e| format!("Failed to get file metadata: {e}"))?
             .permissions();
         permissions.set_mode(0o755);
         fs::set_permissions(&plugin_path, permissions)
-            .map_err(|e| format!("Failed to set executable permissions: {}", e))?;
+            .map_err(|e| format!("Failed to set executable permissions: {e}"))?;
     }
 
     Ok(plugin_path.to_string_lossy().to_string())
@@ -284,7 +281,7 @@ pub fn get_download_info(config: &PluginConfig) -> Result<(String, String, bool)
         ("macos", "x86_64") => "darwin-x86_64",
         ("macos", "aarch64") => "darwin-aarch64",
         ("windows", "x86_64") => "windows-x86_64",
-        _ => return Err(format!("Unsupported platform: {} {}", os, arch)),
+        _ => return Err(format!("Unsupported platform: {os} {arch}")),
     };
 
     // Check if this target is supported by the plugin
@@ -344,7 +341,7 @@ pub fn extract_tar_gz(archive_bytes: &[u8], dest_dir: &Path) -> Result<(), Strin
 
     archive
         .unpack(dest_dir)
-        .map_err(|e| format!("Failed to extract tar.gz archive: {}", e))?;
+        .map_err(|e| format!("Failed to extract tar.gz archive: {e}"))?;
 
     Ok(())
 }
@@ -353,12 +350,12 @@ pub fn extract_tar_gz(archive_bytes: &[u8], dest_dir: &Path) -> Result<(), Strin
 pub fn extract_zip(archive_bytes: &[u8], dest_dir: &Path) -> Result<(), String> {
     let cursor = Cursor::new(archive_bytes);
     let mut archive =
-        ZipArchive::new(cursor).map_err(|e| format!("Failed to read zip archive: {}", e))?;
+        ZipArchive::new(cursor).map_err(|e| format!("Failed to read zip archive: {e}"))?;
 
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
-            .map_err(|e| format!("Failed to access file {} in zip: {}", i, e))?;
+            .map_err(|e| format!("Failed to access file {i} in zip: {e}"))?;
 
         let outpath = match file.enclosed_name() {
             Some(path) => dest_dir.join(path),

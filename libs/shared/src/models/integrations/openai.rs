@@ -27,6 +27,8 @@ impl std::fmt::Display for Role {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub enum AgentModel {
+    #[serde(rename = "opus")]
+    Opus,
     #[serde(rename = "smart")]
     #[default]
     Smart,
@@ -37,6 +39,7 @@ pub enum AgentModel {
 impl std::fmt::Display for AgentModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            AgentModel::Opus => write!(f, "opus"),
             AgentModel::Smart => write!(f, "smart"),
             AgentModel::Eco => write!(f, "eco"),
         }
@@ -46,6 +49,7 @@ impl std::fmt::Display for AgentModel {
 impl From<String> for AgentModel {
     fn from(value: String) -> Self {
         match value.as_str() {
+            "opus" => AgentModel::Opus,
             "eco" => AgentModel::Eco,
             _ => AgentModel::Smart,
         }

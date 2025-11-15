@@ -48,7 +48,7 @@ pub fn spawn_fs_handler(
                     limit,
                     response_tx,
                 } => {
-                    log::info!("Processing ACP read_text_file: {:?}", path);
+                    log::info!("Processing ACP read_text_file: {}", path.display());
                     let request = acp::ReadTextFileRequest {
                         meta: None,
                         session_id,
@@ -58,7 +58,7 @@ pub fn spawn_fs_handler(
                     };
                     let result = match conn.read_text_file(request).await {
                         Ok(response) => Ok(response.content),
-                        Err(e) => Err(format!("ACP read_text_file failed: {}", e)),
+                        Err(e) => Err(format!("ACP read_text_file failed: {e}")),
                     };
                     let _ = response_tx.send(result);
                 }
@@ -68,7 +68,7 @@ pub fn spawn_fs_handler(
                     content,
                     response_tx,
                 } => {
-                    log::info!("Processing ACP write_text_file: {:?}", path);
+                    log::info!("Processing ACP write_text_file: {}", path.display());
                     let request = acp::WriteTextFileRequest {
                         meta: None,
                         session_id,
@@ -77,7 +77,7 @@ pub fn spawn_fs_handler(
                     };
                     let result = match conn.write_text_file(request).await {
                         Ok(_) => Ok(()),
-                        Err(e) => Err(format!("ACP write_text_file failed: {}", e)),
+                        Err(e) => Err(format!("ACP write_text_file failed: {e}")),
                     };
                     let _ = response_tx.send(result);
                 }
@@ -93,7 +93,7 @@ pub async fn execute_acp_fs_tool(
     session_id: &acp::SessionId,
 ) -> Result<Option<rmcp::model::CallToolResult>, String> {
     let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-        .map_err(|e| format!("Failed to parse tool arguments: {}", e))?;
+        .map_err(|e| format!("Failed to parse tool arguments: {e}"))?;
 
     match tool_call.function.name.as_str() {
         "view" => {
@@ -102,33 +102,30 @@ pub async fn execute_acp_fs_tool(
                 .and_then(|p| p.as_str())
                 .ok_or_else(|| "Missing 'path' parameter".to_string())?;
 
+            #[allow(clippy::cast_possible_truncation)]
             let line = args
                 .get("view_range")
                 .and_then(|r| r.as_array())
                 .and_then(|arr| arr.first())
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .map(|v| v as u32);
 
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let limit = args
                 .get("view_range")
                 .and_then(|r| r.as_array())
                 .and_then(|arr| arr.get(1))
-                .and_then(|v| v.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .and_then(|v| if v == -1 { None } else { Some(v as u32) });
 
             log::info!(
-                "Reading file via ACP: {} (line: {:?}, limit: {:?})",
-                path,
-                line,
-                limit
+                "Reading file via ACP: {path} (line: {line:?}, limit: {limit:?})"
             );
 
             let (response_tx, response_rx) = oneshot::channel();
             let absolute_path = resolve_absolute_path(path);
             log::info!(
-                "Resolved path '{}' to absolute path: {:?}",
-                path,
-                absolute_path
+                "Resolved path '{path}' to absolute path: {}", absolute_path.display()
             );
             fs_tx
                 .send(FsOperation::ReadTextFile {
@@ -162,14 +159,12 @@ pub async fn execute_acp_fs_tool(
                 .and_then(|c| c.as_str())
                 .ok_or_else(|| "Missing 'file_text' parameter".to_string())?;
 
-            log::info!("Creating file via ACP: {}", path);
+            log::info!("Creating file via ACP: {path}");
 
             let (response_tx, response_rx) = oneshot::channel();
             let absolute_path = resolve_absolute_path(path);
             log::info!(
-                "Resolved path '{}' to absolute path: {:?}",
-                path,
-                absolute_path
+                "Resolved path '{path}' to absolute path: {}", absolute_path.display()
             );
             fs_tx
                 .send(FsOperation::WriteTextFile {
@@ -186,8 +181,7 @@ pub async fn execute_acp_fs_tool(
 
             Ok(Some(rmcp::model::CallToolResult {
                 content: vec![rmcp::model::Content::text(format!(
-                    "Successfully created file: {}",
-                    path
+                    "Successfully created file: {path}"
                 ))],
                 is_error: Some(false),
                 meta: None,
@@ -212,18 +206,16 @@ pub async fn execute_acp_fs_tool(
 
             let replace_all = args
                 .get("replace_all")
-                .and_then(|b| b.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
-            log::info!("Replacing text in file via ACP: {}", path);
+            log::info!("Replacing text in file via ACP: {path}");
 
             // Read current content
             let (read_tx, read_rx) = oneshot::channel();
             let absolute_path = resolve_absolute_path(path);
             log::info!(
-                "Resolved path '{}' to absolute path: {:?}",
-                path,
-                absolute_path
+                "Resolved path '{path}' to absolute path: {}", absolute_path.display()
             );
             fs_tx
                 .send(FsOperation::ReadTextFile {
@@ -242,8 +234,7 @@ pub async fn execute_acp_fs_tool(
             // Check if old_str exists
             if !content.contains(old_str) {
                 return Err(format!(
-                    "STRING_NOT_FOUND: '{}' not found in file '{}'",
-                    old_str, path
+                    "STRING_NOT_FOUND: '{old_str}' not found in file '{path}'"
                 ));
             }
 
@@ -277,8 +268,7 @@ pub async fn execute_acp_fs_tool(
 
             Ok(Some(rmcp::model::CallToolResult {
                 content: vec![rmcp::model::Content::text(format!(
-                    "Successfully replaced {} occurrence(s) in file: {}",
-                    replacement_count, path
+                    "Successfully replaced {replacement_count} occurrence(s) in file: {path}"
                 ))],
                 is_error: Some(false),
                 meta: None,

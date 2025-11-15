@@ -104,6 +104,7 @@ fn render_usage_summary(f: &mut Frame, state: &AppState, area: Rect) {
     let max_tokens = match state.model {
         AgentModel::Eco => CONTEXT_MAX_UTIL_TOKENS_ECO,
         AgentModel::Smart => CONTEXT_MAX_UTIL_TOKENS,
+        AgentModel::Opus => CONTEXT_MAX_UTIL_TOKENS_ECO,
     };
     let formatted_max = format_number_with_separator(max_tokens);
 
@@ -147,13 +148,15 @@ fn render_usage_gauge(f: &mut Frame, state: &AppState, area: Rect) {
     let max_tokens = match state.model {
         AgentModel::Eco => CONTEXT_MAX_UTIL_TOKENS_ECO,
         AgentModel::Smart => CONTEXT_MAX_UTIL_TOKENS,
+        AgentModel::Opus => CONTEXT_MAX_UTIL_TOKENS_ECO,
     };
 
     let ratio = (total_tokens / max_tokens as f64).clamp(0.0, 1.0);
 
-    // For eco model, always show green since there's no extra charge
+    // For eco model and opus, always show green since there's no extra charge
     let gauge_color = match state.model {
         AgentModel::Eco => Color::Green,
+        AgentModel::Opus => Color::Green,
         AgentModel::Smart => {
             if usage.total_tokens >= CONTEXT_LESS_CHARGE_LIMIT {
                 Color::Yellow
@@ -198,11 +201,13 @@ fn render_markers(f: &mut Frame, state: &AppState, area: Rect) {
     let max_tokens = match state.model {
         AgentModel::Eco => CONTEXT_MAX_UTIL_TOKENS_ECO,
         AgentModel::Smart => CONTEXT_MAX_UTIL_TOKENS,
+        AgentModel::Opus => CONTEXT_MAX_UTIL_TOKENS_ECO,
     };
 
-    // For eco model, don't show the middle marker since there's no pricing tier change
+    // For eco model and opus, don't show the middle marker since there's no pricing tier change
     let cost_marker = match state.model {
         AgentModel::Eco => Paragraph::new(Line::from("")).alignment(Alignment::Center),
+        AgentModel::Opus => Paragraph::new(Line::from("")).alignment(Alignment::Center),
         AgentModel::Smart => Paragraph::new(Line::from(
             format_number_with_separator(CONTEXT_LESS_CHARGE_LIMIT).to_string(),
         ))
@@ -230,6 +235,10 @@ fn render_pricing_table(f: &mut Frame, state: &AppState, area: Rect) {
     // Select the appropriate pricing table based on model
     let (pricing_table, table_len) = match state.model {
         AgentModel::Eco => (
+            &CONTEXT_PRICING_TABLE_ECO[..],
+            CONTEXT_PRICING_TABLE_ECO.len(),
+        ),
+        AgentModel::Opus => (
             &CONTEXT_PRICING_TABLE_ECO[..],
             CONTEXT_PRICING_TABLE_ECO.len(),
         ),
@@ -417,6 +426,13 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
 
     let message = match state.model {
         AgentModel::Eco => {
+            if state.context_usage_percent >= CONTEXT_APPROACH_PERCENT {
+                "Approaching the 200K token limit. Try /summarize or /model."
+            } else {
+                "Anthropic regular pricing"
+            }
+        }
+        AgentModel::Opus => {
             if state.context_usage_percent >= CONTEXT_APPROACH_PERCENT {
                 "Approaching the 200K token limit. Try /summarize or /model."
             } else {

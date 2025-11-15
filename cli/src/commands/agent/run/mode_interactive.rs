@@ -17,7 +17,7 @@ use crate::utils::local_context::LocalContext;
 use crate::utils::network;
 use reqwest::header::HeaderMap;
 use stakpak_api::models::ApiStreamError;
-use stakpak_api::{Client, ClientConfig, ListRuleBook};
+use stakpak_api::{Client, ListRuleBook};
 use stakpak_mcp_client::ClientManager;
 use stakpak_mcp_server::{EnabledToolsConfig, MCPServerConfig, ToolMode, start_server};
 use stakpak_shared::cert_utils::CertificateChain;
@@ -57,6 +57,30 @@ pub struct RunInteractiveConfig {
     pub model: AgentModel,
 }
 
+/// Derives the authentication type label based on the active provider.
+/// Returns a label like "OAuth", "API Key (Stakpak)", "API Key (Anthropic)", or "Unknown".
+fn get_auth_type_for_provider(ctx: &AppConfig, provider_name: &str) -> String {
+    match provider_name {
+        "Stakpak" => {
+            if ctx.api_key.is_some() {
+                "API Key (Stakpak)".to_string()
+            } else {
+                "Unknown".to_string()
+            }
+        }
+        "Anthropic" => {
+            if ctx.anthropic_oauth.is_some() {
+                "OAuth".to_string()
+            } else if ctx.anthropic_api_key.is_some() {
+                "API Key (Anthropic)".to_string()
+            } else {
+                "Unknown".to_string()
+            }
+        }
+        _ => "Unknown".to_string(),
+    }
+}
+
 pub async fn run_interactive(
     mut ctx: AppConfig,
     mut config: RunInteractiveConfig,
@@ -75,8 +99,6 @@ pub async fn run_interactive(
         };
 
         // Clone config values for this iteration
-        let api_key = ctx.api_key.clone();
-        let api_endpoint = ctx.api_endpoint.clone();
         let config_path = ctx.config_path.clone();
         let mcp_server_host = ctx.mcp_server_host.clone();
         let local_context = config.local_context.clone();
@@ -111,17 +133,14 @@ pub async fn run_interactive(
         });
 
         let protocol = if enable_mtls { "https" } else { "http" };
-        let local_mcp_server_host = format!("{}://{}", protocol, bind_address);
+        let local_mcp_server_host = format!("{protocol}://{bind_address}");
 
         let certificate_chain_for_server = certificate_chain.clone();
         let subagent_configs_for_server = subagent_configs.clone();
         let mcp_handle = tokio::spawn(async move {
             let _ = start_server(
                 MCPServerConfig {
-                    api: ClientConfig {
-                        api_key: ctx_clone.api_key.clone(),
-                        api_endpoint: ctx_clone.api_endpoint.clone(),
-                    },
+                    api: ctx_clone.clone().into(),
                     redact_secrets,
                     privacy_mode,
                     enabled_tools,
@@ -185,22 +204,28 @@ pub async fn run_interactive(
         });
 
         // Spawn client task
-        let api_key_for_client = api_key.clone();
-        let api_endpoint_for_client = api_endpoint.clone();
+        let mut ctx_for_client = ctx.clone();
         let shutdown_tx_for_client = shutdown_tx.clone();
         let client_handle: tokio::task::JoinHandle<ClientTaskResult> = tokio::spawn(async move {
             let mut current_session_id: Option<Uuid> = None;
-            let client = Client::new(&ClientConfig {
-                api_key: api_key_for_client.clone(),
-                api_endpoint: api_endpoint_for_client.clone(),
-            })
-            .map_err(|e| e.to_string())?;
+            let mut client =
+                Client::new(&ctx_for_client.clone().into())?;
 
             let data = client.get_my_account().await?;
             send_input_event(&input_tx, InputEvent::GetStatus(data.to_text())).await?;
+
+            // Send provider information
+            let provider_name = client.get_provider_display_name();
+            let auth_type = get_auth_type_for_provider(&ctx_for_client, &provider_name);
+            send_input_event(
+                &input_tx,
+                InputEvent::SetProviderInfo(provider_name, auth_type),
+            )
+            .await?;
+
             // Load available profiles and send to TUI
-            let profiles_config_path = ctx.config_path.clone();
-            let current_profile_name = ctx.profile_name.clone();
+            let profiles_config_path = ctx_for_client.config_path.clone();
+            let current_profile_name = ctx_for_client.profile_name.clone();
             if let Ok(profiles) = AppConfig::list_available_profiles(Some(&profiles_config_path)) {
                 let _ = send_input_event(
                     &input_tx,
@@ -220,8 +245,7 @@ pub async fn run_interactive(
                 // Try to get session ID from checkpoint
                 let checkpoint_uuid = Uuid::parse_str(&checkpoint_id_str).map_err(|_| {
                     format!(
-                        "Invalid checkpoint ID '{}' - must be a valid UUID",
-                        checkpoint_id_str
+                        "Invalid checkpoint ID '{checkpoint_id_str}' - must be a valid UUID"
                     )
                 })?;
 
@@ -275,7 +299,7 @@ pub async fn run_interactive(
                         if let Some(tool_call_results) = &tool_calls_results
                             && let Some(history_str) = tool_call_history_string(tool_call_results)
                         {
-                            user_input = format!("{}\n\n{}", history_str, user_input);
+                            user_input = format!("{history_str}\n\n{user_input}");
                         }
 
                         // Add local context to the user input
@@ -289,7 +313,7 @@ pub async fn run_interactive(
                                     add_local_context(&messages, &user_input, &local_context, true)
                                         .await
                                         .map_err(|e| {
-                                            format!("Failed to format local context: {}", e)
+                                            format!("Failed to format local context: {e}")
                                         })?;
 
                                 // Then add rulebooks
@@ -465,82 +489,15 @@ pub async fn run_interactive(
                                 ),
                             )
                             .await?;
-                            match resume_session_from_checkpoint(&client, session_id, &input_tx)
-                                .await
-                            {
-                                Ok((chat_messages, tool_calls, session_id_uuid)) => {
-                                    // Track the current session ID
-                                    current_session_id = Some(session_id_uuid);
-
-                                    // Mark that we need to update rulebooks on the next user message
-                                    should_update_rulebooks_on_next_message = true;
-
-                                    // Reset usage for the resumed session
-                                    total_session_usage =
-                                        stakpak_shared::models::integrations::openai::Usage {
-                                            prompt_tokens: 0,
-                                            completion_tokens: 0,
-                                            total_tokens: 0,
-                                            prompt_tokens_details: None,
-                                        };
-
-                                    messages.extend(chat_messages);
-                                    tools_queue.extend(tool_calls.clone());
-
-                                    if !tools_queue.is_empty() {
-                                        send_input_event(
-                                            &input_tx,
-                                            InputEvent::MessageToolCalls(tools_queue.clone()),
-                                        )
-                                        .await?;
-                                        let initial_tool_call = tools_queue.remove(0);
-                                        send_tool_call(&input_tx, &initial_tool_call).await?;
-                                    }
-                                    send_input_event(
-                                        &input_tx,
-                                        InputEvent::EndLoadingOperation(
-                                            LoadingOperation::CheckpointResume,
-                                        ),
-                                    )
-                                    .await?;
-                                }
-                                Err(_) => {
-                                    // Error already handled in the function
-                                    send_input_event(
-                                        &input_tx,
-                                        InputEvent::EndLoadingOperation(
-                                            LoadingOperation::CheckpointResume,
-                                        ),
-                                    )
-                                    .await?;
-                                    continue;
-                                }
-                            }
-                        } else {
-                            send_input_event(
-                                &input_tx,
-                                InputEvent::Error("No active session to resume".to_string()),
-                            )
-                            .await?;
-                        }
-                        continue;
-                    }
-                    OutputEvent::SwitchToSession(session_id) => {
-                        send_input_event(
-                            &input_tx,
-                            InputEvent::StartLoadingOperation(LoadingOperation::CheckpointResume),
-                        )
-                        .await?;
-                        match resume_session_from_checkpoint(&client, &session_id, &input_tx).await
-                        {
-                            Ok((chat_messages, tool_calls, session_id_uuid)) => {
+                            if let Ok((chat_messages, tool_calls, session_id_uuid)) = resume_session_from_checkpoint(&client, session_id, &input_tx)
+                                .await {
                                 // Track the current session ID
                                 current_session_id = Some(session_id_uuid);
 
                                 // Mark that we need to update rulebooks on the next user message
                                 should_update_rulebooks_on_next_message = true;
 
-                                // Reset usage for the switched session
+                                // Reset usage for the resumed session
                                 total_session_usage =
                                     stakpak_shared::models::integrations::openai::Usage {
                                         prompt_tokens: 0,
@@ -568,8 +525,8 @@ pub async fn run_interactive(
                                     ),
                                 )
                                 .await?;
-                            }
-                            Err(_) => {
+                            } else {
+                                // Error already handled in the function
                                 send_input_event(
                                     &input_tx,
                                     InputEvent::EndLoadingOperation(
@@ -579,6 +536,65 @@ pub async fn run_interactive(
                                 .await?;
                                 continue;
                             }
+                        } else {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::Error("No active session to resume".to_string()),
+                            )
+                            .await?;
+                        }
+                        continue;
+                    }
+                    OutputEvent::SwitchToSession(session_id) => {
+                        send_input_event(
+                            &input_tx,
+                            InputEvent::StartLoadingOperation(LoadingOperation::CheckpointResume),
+                        )
+                        .await?;
+                        if let Ok((chat_messages, tool_calls, session_id_uuid)) = resume_session_from_checkpoint(&client, &session_id, &input_tx).await {
+                            // Track the current session ID
+                            current_session_id = Some(session_id_uuid);
+
+                            // Mark that we need to update rulebooks on the next user message
+                            should_update_rulebooks_on_next_message = true;
+
+                            // Reset usage for the switched session
+                            total_session_usage =
+                                stakpak_shared::models::integrations::openai::Usage {
+                                    prompt_tokens: 0,
+                                    completion_tokens: 0,
+                                    total_tokens: 0,
+                                    prompt_tokens_details: None,
+                                };
+
+                            messages.extend(chat_messages);
+                            tools_queue.extend(tool_calls.clone());
+
+                            if !tools_queue.is_empty() {
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::MessageToolCalls(tools_queue.clone()),
+                                )
+                                .await?;
+                                let initial_tool_call = tools_queue.remove(0);
+                                send_tool_call(&input_tx, &initial_tool_call).await?;
+                            }
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::EndLoadingOperation(
+                                    LoadingOperation::CheckpointResume,
+                                ),
+                            )
+                            .await?;
+                        } else {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::EndLoadingOperation(
+                                    LoadingOperation::CheckpointResume,
+                                ),
+                            )
+                            .await?;
+                            continue;
                         }
                         continue;
                     }
@@ -641,7 +657,7 @@ pub async fn run_interactive(
                         .await?;
 
                         // Validate new profile with API key inheritance
-                        let default_api_key = api_key_for_client.clone();
+                        let default_api_key = ctx_for_client.api_key.clone();
                         let new_config = match super::profile_switch::validate_profile_switch(
                             &new_profile,
                             Some(&config_path),
@@ -691,6 +707,136 @@ pub async fn run_interactive(
                             Some(new_config),
                             total_session_usage,
                         ));
+                    }
+                    OutputEvent::RequestProviderSwitch(requested_provider) => {
+                        // Validate the provider
+                        let new_provider = match requested_provider.as_str() {
+                            "stakpak" => "stakpak",
+                            "anthropic" => "anthropic",
+                            _ => {
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::Error(
+                                        "Invalid provider. Use 'stakpak' or 'anthropic'"
+                                            .to_string(),
+                                    ),
+                                )
+                                .await?;
+                                continue;
+                            }
+                        };
+
+                        // Check if we have credentials for the requested provider
+                        let has_credentials = match new_provider {
+                            "stakpak" => ctx_for_client.api_key.is_some(),
+                            "anthropic" => {
+                                ctx_for_client.anthropic_api_key.is_some()
+                                    || ctx_for_client.anthropic_oauth.is_some()
+                            }
+                            _ => false,
+                        };
+
+                        if !has_credentials {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::Error(format!(
+                                    "No credentials found for {new_provider} provider"
+                                )),
+                            )
+                            .await?;
+                            continue;
+                        }
+
+                        // Update the current profile's provider field
+                        let profile_name = ctx_for_client.profile_name.clone();
+                        if let Err(e) = AppConfig::update_profile_provider(
+                            &config_path,
+                            &profile_name,
+                            Some(new_provider.to_string()),
+                        ) {
+                            send_input_event(
+                                &input_tx,
+                                InputEvent::Error(format!("Failed to update provider: {e}")),
+                            )
+                            .await?;
+                            continue;
+                        }
+
+                        // Reload the config with the new provider
+                        let updated_config =
+                            match AppConfig::load(&profile_name, Some(&config_path)) {
+                                Ok(cfg) => cfg,
+                                Err(e) => {
+                                    send_input_event(
+                                        &input_tx,
+                                        InputEvent::Error(format!(
+                                            "Failed to reload config: {e}"
+                                        )),
+                                    )
+                                    .await?;
+                                    continue;
+                                }
+                            };
+
+                        // Create a new client with the updated provider
+                        let new_client = match Client::new(&updated_config.clone().into()) {
+                            Ok(client) => client,
+                            Err(e) => {
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::Error(format!("Failed to create client: {e}")),
+                                )
+                                .await?;
+                                continue;
+                            }
+                        };
+
+                        // Send provider info to TUI
+                        let provider_name = new_client.get_provider_display_name();
+                        let auth_type = get_auth_type_for_provider(&updated_config, &provider_name);
+                        send_input_event(
+                            &input_tx,
+                            InputEvent::SetProviderInfo(provider_name, auth_type),
+                        )
+                        .await?;
+
+                        // Load available rulebooks for the new provider and send to TUI
+                        // If provider has no rulebooks, fall back to Stakpak
+                        let rulebooks_result = new_client.list_rulebooks().await;
+                        let all_rulebooks = match rulebooks_result {
+                            Ok(rulebooks) if !rulebooks.is_empty() => Some(rulebooks),
+                            _ => {
+                                // Fallback: if this provider has no rulebooks and we have Stakpak credentials,
+                                // try fetching from Stakpak
+                                if updated_config.api_key.is_some() && new_provider != "stakpak" {
+                                    // Create a temporary Stakpak client config
+                                    let mut stakpak_config = updated_config.clone();
+                                    stakpak_config.provider = Some("stakpak".to_string());
+
+                                    if let Ok(stakpak_client) = Client::new(&stakpak_config.into())
+                                    {
+                                        stakpak_client.list_rulebooks().await.ok()
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            }
+                        };
+
+                        if let Some(rulebooks) = all_rulebooks {
+                            all_available_rulebooks = Some(rulebooks.clone());
+                            let _ =
+                                send_input_event(&input_tx, InputEvent::RulebooksLoaded(rulebooks))
+                                    .await;
+                        }
+
+                        // Replace the long-lived client and context with the new ones
+                        client = new_client;
+                        ctx_for_client = updated_config;
+
+                        continue;
                     }
                     OutputEvent::RequestRulebookUpdate(selected_uris) => {
                         // Update the rulebooks list based on selected URIs
@@ -788,27 +934,24 @@ pub async fn run_interactive(
                                     send_input_event(
                                         &input_tx,
                                         InputEvent::Error(format!(
-                                            "RETRY_ATTEMPT_{}",
-                                            retry_attempts
+                                            "RETRY_ATTEMPT_{retry_attempts}"
                                         )),
                                     )
                                     .await?;
 
                                     // Loading will be managed by stream processing on retry
                                     continue;
-                                } else {
-                                    send_input_event(
-                                        &input_tx,
-                                        InputEvent::Error("MAX_RETRY_REACHED".to_string()),
-                                    )
-                                    .await?;
-                                    break Err(e);
                                 }
-                            } else {
-                                send_input_event(&input_tx, InputEvent::Error(format!("{:?}", e)))
-                                    .await?;
+                                send_input_event(
+                                    &input_tx,
+                                    InputEvent::Error("MAX_RETRY_REACHED".to_string()),
+                                )
+                                .await?;
                                 break Err(e);
                             }
+                            send_input_event(&input_tx, InputEvent::Error(format!("{e:?}")))
+                                .await?;
+                            break Err(e);
                         }
                     }
                 };
@@ -897,9 +1040,7 @@ pub async fn run_interactive(
 
                         send_input_event(&input_tx, InputEvent::ResetAutoApproveMessage).await?;
                     }
-                    Err(_) => {
-                        continue;
-                    }
+                    Err(_) => {}
                 }
             }
 
@@ -912,7 +1053,7 @@ pub async fn run_interactive(
         });
 
         // Wait for all tasks to finish
-        let (client_res, _, _, _) =
+        let (client_res, _, (), ()) =
             tokio::try_join!(client_handle, tui_handle, mcp_handle, mcp_progress_handle)
                 .map_err(|e| e.to_string())?;
 
@@ -927,11 +1068,7 @@ pub async fn run_interactive(
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
             // Fetch and filter rulebooks for the new profile
-            let client = Client::new(&ClientConfig {
-                api_key: new_config.api_key.clone(),
-                api_endpoint: new_config.api_endpoint.clone(),
-            })
-            .map_err(|e| e.to_string())?;
+            let client = Client::new(&new_config.clone().into())?;
 
             let new_rulebooks = client.list_rulebooks().await.ok().map(|rulebooks| {
                 if let Some(rulebook_config) = &new_config.rulebooks {
@@ -953,22 +1090,15 @@ pub async fn run_interactive(
 
         // Normal exit - no profile switch requested
         // Display final stats and session info
-        let client = Client::new(&ClientConfig {
-            api_key: ctx.api_key.clone(),
-            api_endpoint: ctx.api_endpoint.clone(),
-        })
-        .map_err(|e| e.to_string())?;
+        let client = Client::new(&ctx.clone().into())?;
 
         // Display session stats
         if let Some(session_id) = final_session_id {
-            match client.get_agent_session_stats(session_id).await {
-                Ok(stats) => {
-                    let renderer = OutputRenderer::new(OutputFormat::Text, false);
-                    print!("{}", renderer.render_session_stats(&stats));
-                }
-                Err(_) => {
-                    // Don't fail the whole operation if stats fetch fails
-                }
+            if let Ok(stats) = client.get_agent_session_stats(session_id).await {
+                let renderer = OutputRenderer::new(OutputFormat::Text, false);
+                print!("{}", renderer.render_session_stats(&stats));
+            } else {
+                // Don't fail the whole operation if stats fetch fails
             }
         }
 
@@ -987,25 +1117,23 @@ pub async fn run_interactive(
             .iter()
             .rev()
             .find(|m| m.role == stakpak_shared::models::integrations::openai::Role::Assistant)
-            .and_then(|m| m.content.as_ref().and_then(|c| c.extract_checkpoint_id()));
+            .and_then(|m| m.content.as_ref().and_then(stakpak_shared::models::integrations::openai::MessageContent::extract_checkpoint_id));
 
         if let Some(latest_checkpoint) = latest_checkpoint {
             println!(
-                r#"To resume, run:
-stakpak -c {}
+                r"To resume, run:
+stakpak -c {latest_checkpoint}
 
 To get session data, run:
-stakpak agent get {}
-"#,
-                latest_checkpoint, latest_checkpoint
+stakpak agent get {latest_checkpoint}
+"
             );
         }
 
         if let Some(session_id) = final_session_id {
             println!(
                 "To view full session in browser:
-https://stakpak.dev/{}/agent-sessions/{}",
-                username, session_id
+https://stakpak.dev/{username}/agent-sessions/{session_id}"
             );
         }
 
@@ -1019,4 +1147,115 @@ https://stakpak.dev/{}/agent-sessions/{}",
     } // End of 'profile_switch_loop
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_config() -> AppConfig {
+        AppConfig {
+            api_key: None,
+            anthropic_api_key: None,
+            anthropic_oauth: None,
+            provider: None,
+            api_endpoint: "https://api.stakpak.dev".to_string(),
+            profile_name: "default".to_string(),
+            config_path: "/tmp/config.toml".to_string(),
+            machine_name: None,
+            auto_append_gitignore: None,
+            allowed_tools: None,
+            auto_approve: None,
+            rulebooks: None,
+            mcp_server_host: None,
+            warden: None,
+        }
+    }
+
+    fn create_test_oauth() -> crate::config::AnthropicOAuth {
+        crate::config::AnthropicOAuth {
+            refresh_token: "test-refresh-token".to_string(),
+            access_token: "test-access-token".to_string(),
+            expires: 1234567890,
+        }
+    }
+
+    #[test]
+    fn test_get_auth_type_stakpak_with_api_key() {
+        let mut config = create_test_config();
+        config.api_key = Some("test-stakpak-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "Stakpak");
+        assert_eq!(auth_type, "API Key (Stakpak)");
+    }
+
+    #[test]
+    fn test_get_auth_type_stakpak_without_api_key() {
+        let config = create_test_config();
+
+        let auth_type = get_auth_type_for_provider(&config, "Stakpak");
+        assert_eq!(auth_type, "Unknown");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_with_oauth() {
+        let mut config = create_test_config();
+        config.anthropic_oauth = Some(create_test_oauth());
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "OAuth");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_with_api_key() {
+        let mut config = create_test_config();
+        config.anthropic_api_key = Some("test-anthropic-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "API Key (Anthropic)");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_oauth_takes_precedence() {
+        let mut config = create_test_config();
+        config.anthropic_oauth = Some(create_test_oauth());
+        config.anthropic_api_key = Some("test-anthropic-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "OAuth");
+    }
+
+    #[test]
+    fn test_get_auth_type_anthropic_without_credentials() {
+        let config = create_test_config();
+
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "Unknown");
+    }
+
+    #[test]
+    fn test_get_auth_type_derives_from_active_provider_not_available_creds() {
+        // This is the key test case: when both Stakpak and Anthropic creds exist,
+        // the auth type should match the active provider
+        let mut config = create_test_config();
+        config.api_key = Some("test-stakpak-key".to_string());
+        config.anthropic_oauth = Some(create_test_oauth());
+
+        // When Stakpak is active, should show Stakpak auth
+        let auth_type = get_auth_type_for_provider(&config, "Stakpak");
+        assert_eq!(auth_type, "API Key (Stakpak)");
+
+        // When Anthropic is active, should show Anthropic auth
+        let auth_type = get_auth_type_for_provider(&config, "Anthropic");
+        assert_eq!(auth_type, "OAuth");
+    }
+
+    #[test]
+    fn test_get_auth_type_unknown_provider() {
+        let mut config = create_test_config();
+        config.api_key = Some("test-key".to_string());
+
+        let auth_type = get_auth_type_for_provider(&config, "UnknownProvider");
+        assert_eq!(auth_type, "Unknown");
+    }
 }

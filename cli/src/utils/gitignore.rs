@@ -7,7 +7,7 @@ use std::{
 use crate::config::AppConfig;
 
 /// Appends `.stakpak` to the `.gitignore` file in the current directory if:
-/// 1. The feature is enabled in config (auto_append_gitignore is true)
+/// 1. The feature is enabled in config (`auto_append_gitignore` is true)
 /// 2. We're in a git repository
 /// 3. `.stakpak` is not already in the `.gitignore` file
 pub fn ensure_stakpak_in_gitignore(config: &AppConfig) -> Result<bool, String> {
@@ -18,7 +18,7 @@ pub fn ensure_stakpak_in_gitignore(config: &AppConfig) -> Result<bool, String> {
 
     // Check if we're in a git repository
     let current_dir =
-        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {e}"))?;
 
     let git_info = crate::utils::local_context::get_git_info(&current_dir.to_string_lossy());
 
@@ -41,12 +41,12 @@ pub fn ensure_stakpak_in_gitignore(config: &AppConfig) -> Result<bool, String> {
 /// Checks if `.stakpak` is already present in the `.gitignore` file
 fn stakpak_already_in_gitignore(gitignore_path: &Path) -> Result<bool, String> {
     let file =
-        File::open(gitignore_path).map_err(|e| format!("Failed to open .gitignore: {}", e))?;
+        File::open(gitignore_path).map_err(|e| format!("Failed to open .gitignore: {e}"))?;
 
     let reader = BufReader::new(file);
 
     for line in reader.lines() {
-        let line = line.map_err(|e| format!("Failed to read line from .gitignore: {}", e))?;
+        let line = line.map_err(|e| format!("Failed to read line from .gitignore: {e}"))?;
         let trimmed = line.trim();
 
         // Check for exact matches or patterns that would cover .stakpak
@@ -64,17 +64,17 @@ fn append_stakpak_to_gitignore(gitignore_path: &Path) -> Result<(), String> {
         .create(true)
         .append(true)
         .open(gitignore_path)
-        .map_err(|e| format!("Failed to open/create .gitignore: {}", e))?;
+        .map_err(|e| format!("Failed to open/create .gitignore: {e}"))?;
 
     // Check if file ends with newline, if not add one before our entry
     let needs_newline = if gitignore_path.exists() {
         let metadata = std::fs::metadata(gitignore_path)
-            .map_err(|e| format!("Failed to get .gitignore metadata: {}", e))?;
+            .map_err(|e| format!("Failed to get .gitignore metadata: {e}"))?;
 
         if metadata.len() > 0 {
             // Read the last character to see if we need a newline
             let content = std::fs::read(gitignore_path)
-                .map_err(|e| format!("Failed to read .gitignore: {}", e))?;
+                .map_err(|e| format!("Failed to read .gitignore: {e}"))?;
 
             !content.ends_with(b"\n")
         } else {
@@ -86,7 +86,7 @@ fn append_stakpak_to_gitignore(gitignore_path: &Path) -> Result<(), String> {
 
     // Add newline if needed before our section
     if needs_newline {
-        writeln!(file).map_err(|e| format!("Failed to write newline to .gitignore: {}", e))?;
+        writeln!(file).map_err(|e| format!("Failed to write newline to .gitignore: {e}"))?;
     }
 
     // Add a blank line for separation (if file has content)
@@ -94,14 +94,14 @@ fn append_stakpak_to_gitignore(gitignore_path: &Path) -> Result<(), String> {
         && let Ok(metadata) = std::fs::metadata(gitignore_path)
         && metadata.len() > 0
     {
-        writeln!(file).map_err(|e| format!("Failed to write blank line to .gitignore: {}", e))?;
+        writeln!(file).map_err(|e| format!("Failed to write blank line to .gitignore: {e}"))?;
     }
 
     // Add comment and .stakpak entry
     writeln!(file, "# Stakpak local files")
-        .map_err(|e| format!("Failed to write comment to .gitignore: {}", e))?;
+        .map_err(|e| format!("Failed to write comment to .gitignore: {e}"))?;
     writeln!(file, ".stakpak")
-        .map_err(|e| format!("Failed to write .stakpak to .gitignore: {}", e))?;
+        .map_err(|e| format!("Failed to write .stakpak to .gitignore: {e}"))?;
 
     Ok(())
 }

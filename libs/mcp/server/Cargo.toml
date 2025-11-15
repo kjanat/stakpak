@@ -2,31 +2,32 @@
 name = "stakpak-mcp-server"
 version = { workspace = true }
 edition = "2024"
+description = "MCP server library for Stakpak"
 
 [dependencies]
-stakpak-api = { path = "../../api" }
-stakpak-shared = { path = "../../shared" }
+anyhow = { workspace = true }
+axum = "0.8.4"
+axum-server = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
+fast_html2md = "=0.0.48"
+rand = { workspace = true }
+reqwest = { workspace = true }
+rmcp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
-anyhow = { workspace = true }
-rmcp = { workspace = true }
-uuid = { workspace = true }
-rand = { workspace = true }
-axum = "0.8.4"
-chrono = { version = "0.4", features = ["serde"] }
-axum-server = { workspace = true }
-reqwest = { workspace = true }
-url = "2.5.0"
-fast_html2md = "=0.0.48"
-walkdir = { workspace = true }
-toml = "0.8"
 similar = { workspace = true }
+stakpak-api = { path = "../../api" }
+stakpak-shared = { path = "../../shared" }
+tokio = { workspace = true }
+toml = "0.8"
+tracing = { workspace = true }
+url = "2.5.0"
+uuid = { workspace = true }
+walkdir = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.8"
 
 [lints.clippy]
-unwrap_used = "deny"
 expect_used = "deny"
+unwrap_used = "deny"

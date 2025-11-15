@@ -9,15 +9,18 @@
 Choose your preferred installation method:
 
 #### Homebrew (Recommended for macOS/Linux)
+
 ```bash
 brew tap stakpak/stakpak
 brew install stakpak
 ```
 
 #### Binary Release
+
 Download the latest binary for your platform from [GitHub Releases](https://github.com/stakpak/agent/releases).
 
 #### Docker
+
 ```bash
 # Basic usage
 docker pull ghcr.io/stakpak/agent:latest
@@ -30,6 +33,7 @@ docker run -it \
 ```
 
 #### From Source (Development)
+
 ```bash
 git clone https://github.com/stakpak/agent.git
 cd agent
@@ -39,10 +43,12 @@ cargo build --release
 ### 2. Authentication
 
 #### Get Your API Key
+
 1. Visit [stakpak.dev](https://stakpak.dev)
 2. Click "Login" → "Create API Key" (no card required)
 
 #### Configure Authentication
+
 ```bash
 # Option 1: Environment variable
 export STAKPAK_API_KEY=<your-api-key>
@@ -69,24 +75,29 @@ stakpak --async "Help me understand this codebase"
 Stakpak offers multiple operation modes to fit different workflows:
 
 ### Interactive TUI Mode (Default)
+
 ```bash
 stakpak
 ```
+
 - Full-featured terminal interface
 - Real-time chat with AI agent
 - Visual progress tracking
 - Tool call approval interface
 
 ### Async Mode
+
 ```bash
 stakpak --async "Deploy my application"
 stakpak --print "Analyze this error log"
 ```
+
 - Non-interactive execution
 - Perfect for automation and scripting
 - Configurable step limits
 
 ### MCP Server Mode
+
 ```bash
 # Local tools only (no API key required)
 stakpak mcp --tool-mode local
@@ -97,14 +108,17 @@ stakpak mcp --tool-mode combined
 # With custom configuration
 stakpak mcp --enable-slack-tools --privacy-mode
 ```
+
 - Model Context Protocol server
 - Integrates with AI coding assistants
 - Secure tool access control
 
 ### ACP Mode (Editor Integration)
+
 ```bash
 stakpak acp
 ```
+
 - Agent Client Protocol for editor integration
 - Real-time code analysis and modification
 - Works with Zed editor and other ACP-compatible editors
@@ -112,11 +126,13 @@ stakpak acp
 ## 🔒 Security Features
 
 ### Mutual TLS (mTLS)
+
 - End-to-end encrypted communication
 - Automatically generated certificates
 - Enabled by default for all modes
 
 ### Secret Redaction
+
 ```bash
 # Automatic secret detection and redaction
 stakpak --privacy-mode
@@ -126,24 +142,29 @@ stakpak --disable-secret-redaction
 ```
 
 ### Privacy Mode
+
 - Redacts IP addresses, AWS account IDs, and other sensitive data
 - Perfect for sharing logs or screenshots
 
 ## 🛠️ Core Capabilities
 
 ### Infrastructure Code Indexing
+
 - Automatic indexing of Terraform, Kubernetes, Dockerfile, and GitHub Actions
 - Semantic search across your infrastructure code
 - Real-time file watching and updates
 
 ### Subagents (Incoming)
+
 ```bash
 stakpak --enable-subagents
 ```
+
 - **ResearchAgent**: Fast code exploration and documentation lookup
 - **SandboxResearchAgent**: Secure containerized analysis with command execution
 
 ### Configuration Management
+
 ```bash
 # View current config
 stakpak config show
@@ -158,6 +179,7 @@ stakpak set --machine-name "my-dev-machine"
 ## 📋 Configuration
 
 ### Profile-Based Configuration
+
 Stakpak supports multiple configuration profiles for different environments:
 
 ```toml
@@ -168,7 +190,7 @@ allowed_tools = ["view", "search_docs", "create", "run_command"]
 
 [profiles.production]
 api_key = "prod_api_key_here"
-allowed_tools = ["view", "search_docs"]  # Read-only for safety
+allowed_tools = ["view", "search_docs"] # Read-only for safety
 
 [profiles.development]
 api_key = "dev_api_key_here"
@@ -176,6 +198,7 @@ allowed_tools = ["view", "search_docs", "create", "str_replace", "run_command"]
 ```
 
 ### Key Configuration Options
+
 - `allowed_tools`: Control which tools the agent can use
 - `auto_approve`: Automatically approve specific tool calls
 - `rulebooks`: Customize agent behavior with organizational policies
@@ -184,6 +207,7 @@ allowed_tools = ["view", "search_docs", "create", "str_replace", "run_command"]
 ## 🎮 Keyboard Shortcuts
 
 ### Interactive Mode
+
 - `Arrow keys` / `Tab`: Navigate options
 - `Esc`: Exit current prompt
 - `?`: Show shortcuts help
@@ -195,6 +219,7 @@ allowed_tools = ["view", "search_docs", "create", "str_replace", "run_command"]
 ## 🔧 Advanced Usage
 
 ### Checkpoint System
+
 ```bash
 # Resume from a checkpoint
 stakpak -c <checkpoint-id>
@@ -204,6 +229,7 @@ stakpak --workdir /path/to/project
 ```
 
 ### Tool Restrictions
+
 ```bash
 # Allow only specific tools
 stakpak --tool view --tool search_docs
@@ -213,20 +239,25 @@ stakpak --system-prompt-file ./my-prompt.txt
 ```
 
 ### Study Mode
+
 ```bash
 stakpak --study-mode
 ```
+
 Optimizes the agent for learning and educational purposes.
 
 ### Large Project Support
+
 ```bash
 stakpak --index-big-project
 ```
+
 Allows indexing of projects with more than 500 files.
 
 ## 🐳 Docker Integration
 
 The Docker image includes popular DevOps tools:
+
 - Docker CLI
 - AWS CLI
 - Google Cloud CLI
@@ -237,6 +268,7 @@ The Docker image includes popular DevOps tools:
 - And more...
 
 ### Containerized Usage
+
 ```bash
 # Basic containerized agent
 docker run -it ghcr.io/stakpak/agent:latest

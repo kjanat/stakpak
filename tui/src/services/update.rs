@@ -677,6 +677,10 @@ pub fn update(
         InputEvent::GetStatus(account_info) => {
             state.account_info = account_info;
         }
+        InputEvent::SetProviderInfo(provider_name, auth_type) => {
+            state.provider_name = provider_name;
+            state.provider_auth_type = auth_type;
+        }
         InputEvent::Tab => {
             if state.show_collapsed_messages {
                 handle_collapsed_messages_tab(state, message_area_height, message_area_width);
@@ -1583,8 +1587,45 @@ fn handle_input_submitted(
         return;
     }
 
-    // Handle toggle auto-approve command
+    // Handle provider switch command
     let input_text = state.input().to_string();
+    if input_text.trim().starts_with("/provider") {
+        let input_parts: Vec<&str> = input_text.split_whitespace().collect();
+        if input_parts.len() == 1 {
+            // Show current provider
+            let provider_msg = if !state.provider_name.is_empty() {
+                format!(
+                    "Current provider: {}\nAuth: {}",
+                    state.provider_name, state.provider_auth_type
+                )
+            } else {
+                "Provider information not available".to_string()
+            };
+            state.messages.push(Message::info(provider_msg, None));
+        } else if input_parts.len() == 2 {
+            let requested_provider = input_parts[1].to_lowercase();
+            if requested_provider == "stakpak" || requested_provider == "anthropic" {
+                state.messages.push(Message::info(
+                    format!("Switching provider to: {}", requested_provider),
+                    None,
+                ));
+                let _ = output_tx.try_send(OutputEvent::RequestProviderSwitch(requested_provider));
+            } else {
+                push_error_message(
+                    state,
+                    "Invalid provider. Use 'stakpak' or 'anthropic'.",
+                    None,
+                );
+            }
+        } else {
+            push_error_message(state, "Usage: /provider [stakpak|anthropic]", None);
+        }
+        state.text_area.set_text("");
+        state.show_helper_dropdown = false;
+        return;
+    }
+
+    // Handle toggle auto-approve command
     if input_text.trim().starts_with("/toggle_auto_approve") {
         let input_parts: Vec<&str> = input_text.split_whitespace().collect();
         if input_parts.len() >= 2 {
@@ -1740,6 +1781,12 @@ fn handle_input_submitted(
                     state.text_area.set_text("");
                     state.show_helper_dropdown = false;
                 }
+                "/provider" => {
+                    let input = "/provider ".to_string();
+                    state.text_area.set_text(&input);
+                    state.text_area.set_cursor(input.len());
+                    state.show_helper_dropdown = false;
+                }
                 "/issue" => {
                     push_issue_message(state);
                     state.text_area.set_text("");
@@ -1823,6 +1870,7 @@ fn handle_input_submitted(
         let max_tokens = match state.model {
             AgentModel::Eco => CONTEXT_MAX_UTIL_TOKENS_ECO,
             AgentModel::Smart => CONTEXT_MAX_UTIL_TOKENS,
+            AgentModel::Opus => CONTEXT_MAX_UTIL_TOKENS_ECO,
         };
 
         let capped_tokens = state.total_session_usage.total_tokens.min(max_tokens);
@@ -2708,6 +2756,18 @@ fn execute_command_palette_selection(
         CommandAction::ShowStatus => {
             push_status_message(state);
         }
+        CommandAction::SwitchProvider => {
+            // Show current provider
+            let provider_msg = if !state.provider_name.is_empty() {
+                format!(
+                    "Current provider: {}\nAuth: {}\n\nUse /provider [stakpak|anthropic] to switch",
+                    state.provider_name, state.provider_auth_type
+                )
+            } else {
+                "Provider information not available".to_string()
+            };
+            state.messages.push(Message::info(provider_msg, None));
+        }
         CommandAction::MemorizeConversation => {
             push_memorize_message(state);
             let _ = output_tx.try_send(OutputEvent::Memorize);
@@ -2737,6 +2797,10 @@ fn execute_command_palette_selection(
 
 fn switch_model(state: &mut AppState) -> Result<(), String> {
     match state.model {
+        AgentModel::Opus => {
+            state.model = AgentModel::Smart;
+            Ok(())
+        }
         AgentModel::Smart => {
             if state.current_message_usage.total_tokens < CONTEXT_MAX_UTIL_TOKENS_ECO {
                 state.model = AgentModel::Eco;
@@ -2749,7 +2813,7 @@ fn switch_model(state: &mut AppState) -> Result<(), String> {
             }
         }
         AgentModel::Eco => {
-            state.model = AgentModel::Smart;
+            state.model = AgentModel::Opus;
             Ok(())
         }
     }

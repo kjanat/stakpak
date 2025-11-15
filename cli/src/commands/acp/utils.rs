@@ -1,7 +1,7 @@
 use regex::Regex;
 
 /// Convert XML tags to markdown headers using pattern matching
-/// Handles the 4 specific tags: scratchpad, todo, local_context, rulebooks
+/// Handles the 4 specific tags: scratchpad, todo, `local_context`, rulebooks
 pub fn convert_xml_tags_to_markdown(text: &str) -> String {
     let mut result = text.to_string();
 
@@ -21,12 +21,12 @@ pub fn convert_xml_tags_to_markdown(text: &str) -> String {
     ];
 
     // Convert opening tags
-    for (opening_tag, markdown_header) in tag_patterns.iter() {
+    for (opening_tag, markdown_header) in &tag_patterns {
         result = result.replace(opening_tag, markdown_header);
     }
 
     // Remove closing tags
-    for closing_tag in closing_patterns.iter() {
+    for closing_tag in &closing_patterns {
         result = result.replace(closing_tag, "");
     }
 

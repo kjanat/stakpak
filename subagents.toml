@@ -4,11 +4,11 @@ Fast research agent for code exploration, documentation lookup, and analysis. Id
 """
 max_steps = 20
 allowed_tools = [
-    "view",
-    "local_code_search",
-    "search_docs",
-    "search_memory",
-    "read_rulebook",
+  "view",
+  "local_code_search",
+  "search_docs",
+  "search_memory",
+  "read_rulebook",
 ]
 
 [subagents.SandboxResearchAgent]
@@ -20,27 +20,25 @@ Note: Slower than ResearchAgent due to containerization overhead, but provides a
 """
 max_steps = 30
 allowed_tools = [
-    "run_command",
-    "view",
-    "local_code_search",
-    "search_docs",
-    "search_memory",
-    "read_rulebook",
+  "run_command",
+  "view",
+  "local_code_search",
+  "search_docs",
+  "search_memory",
+  "read_rulebook",
 ]
 
 [subagents.SandboxResearchAgent.warden]
 enabled = true
 volumes = [
-    # stakpak config
-    "~/.stakpak/config.toml:/home/agent/.stakpak/config.toml:ro",
-
-    # working directory
-    "./:/agent:ro",
-
-    # cloud credentials
-    "~/.aws:/home/agent/.aws:ro",
-    "~/.config/gcloud:/home/agent/.config/gcloud:ro",
-    "~/.digitalocean:/home/agent/.digitalocean:ro",
-    "~/.azure:/home/agent/.azure:ro",
-    "~/.kube:/home/agent/.kube:ro",
+  # stakpak config
+  "~/.stakpak/config.toml:/home/agent/.stakpak/config.toml:ro",
+  # working directory
+  "./:/agent:ro",
+  # cloud credentials
+  "~/.aws:/home/agent/.aws:ro",
+  "~/.config/gcloud:/home/agent/.config/gcloud:ro",
+  "~/.digitalocean:/home/agent/.digitalocean:ro",
+  "~/.azure:/home/agent/.azure:ro",
+  "~/.kube:/home/agent/.kube:ro",
 ]

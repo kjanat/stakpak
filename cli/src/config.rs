@@ -32,6 +32,12 @@ pub struct WardenConfig {
 pub struct ProfileConfig {
     pub api_endpoint: Option<String>,
     pub api_key: Option<String>,
+    /// Anthropic API key for Claude Code integration
+    pub anthropic_api_key: Option<String>,
+    /// Anthropic OAuth tokens for Claude Pro/Max subscription
+    pub anthropic_oauth: Option<AnthropicOAuth>,
+    /// LLM Provider: "stakpak" or "anthropic"
+    pub provider: Option<String>,
     /// Allowed tools (empty = all tools allowed)
     pub allowed_tools: Option<Vec<String>>,
     /// Tools that auto-approve without asking
@@ -40,6 +46,14 @@ pub struct ProfileConfig {
     pub rulebooks: Option<RulebookConfig>,
     /// Warden (runtime security) configuration
     pub warden: Option<WardenConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AnthropicOAuth {
+    pub refresh_token: String,
+    pub access_token: String,
+    /// Expiry time in milliseconds since Unix epoch
+    pub expires: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -58,6 +72,9 @@ pub struct ConfigFile {
 pub struct AppConfig {
     pub api_endpoint: String,
     pub api_key: Option<String>,
+    pub anthropic_api_key: Option<String>,
+    pub anthropic_oauth: Option<AnthropicOAuth>,
+    pub provider: Option<String>,
     pub mcp_server_host: Option<String>,
     pub machine_name: Option<String>,
     pub auto_append_gitignore: Option<bool>,
@@ -93,26 +110,47 @@ pub struct ProfileInfo {
 
 impl From<AppConfig> for ClientConfig {
     fn from(config: AppConfig) -> Self {
-        ClientConfig {
+        use stakpak_api::LLMProvider;
+
+        let provider = config.provider.as_ref().and_then(|p| match p.as_str() {
+            "anthropic" => Some(LLMProvider::Anthropic),
+            "stakpak" => Some(LLMProvider::Stakpak),
+            _ => None,
+        });
+
+        let anthropic_oauth =
+            config
+                .anthropic_oauth
+                .as_ref()
+                .map(|oauth| stakpak_api::AnthropicOAuthTokens {
+                    refresh_token: oauth.refresh_token.clone(),
+                    access_token: oauth.access_token.clone(),
+                    expires: oauth.expires,
+                });
+
+        Self {
             api_key: config.api_key.clone(),
             api_endpoint: config.api_endpoint.clone(),
+            anthropic_api_key: config.anthropic_api_key,
+            anthropic_oauth,
+            provider,
         }
     }
 }
 
 impl From<OldAppConfig> for ProfileConfig {
     fn from(old_config: OldAppConfig) -> Self {
-        ProfileConfig {
+        Self {
             api_endpoint: Some(old_config.api_endpoint),
             api_key: old_config.api_key,
-            ..ProfileConfig::default()
+            ..Self::default()
         }
     }
 }
 
 impl From<OldAppConfig> for Settings {
     fn from(old_config: OldAppConfig) -> Self {
-        Settings {
+        Self {
             machine_name: old_config.machine_name,
             auto_append_gitignore: old_config.auto_append_gitignore,
         }
@@ -122,7 +160,7 @@ impl From<OldAppConfig> for Settings {
 impl From<OldAppConfig> for ConfigFile {
     // OldAppConfigConfig will always create a 'default' ConfigFile
     fn from(old_config: OldAppConfig) -> Self {
-        ConfigFile {
+        Self {
             profiles: HashMap::from([("default".to_string(), old_config.clone().into())]),
             settings: old_config.into(),
         }
@@ -131,7 +169,7 @@ impl From<OldAppConfig> for ConfigFile {
 
 impl Default for ConfigFile {
     fn default() -> Self {
-        ConfigFile {
+        Self {
             profiles: HashMap::from([(
                 "default".into(),
                 ProfileConfig::with_api_endpoint(STAKPAK_API_ENDPOINT),
@@ -167,9 +205,9 @@ fn create_readonly_profile(default_profile: Option<&ProfileConfig>) -> ProfileCo
 
 impl ProfileConfig {
     fn with_api_endpoint(api_endpoint: &str) -> Self {
-        ProfileConfig {
+        Self {
             api_endpoint: Some(api_endpoint.into()),
-            ..ProfileConfig::default()
+            ..Self::default()
         }
     }
 }
@@ -195,11 +233,11 @@ impl AppConfig {
 
         toml::to_string_pretty(&config_file)
             .map_err(|e| {
-                ConfigError::Message(format!("Failed to serialize migrated config: {}", e))
+                ConfigError::Message(format!("Failed to serialize migrated config: {e}"))
             })
             .and_then(|config_str| {
                 write(config_path, config_str).map_err(|e| {
-                    ConfigError::Message(format!("Failed to save migrated config: {}", e))
+                    ConfigError::Message(format!("Failed to save migrated config: {e}"))
                 })
             })?;
 
@@ -212,8 +250,7 @@ impl AppConfig {
                 .or_else(|_| Self::migrate_old_config(config_path, &content)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(ConfigFile::default()),
             Err(e) => Err(ConfigError::Message(format!(
-                "Failed to read config file: {}",
-                e
+                "Failed to read config file: {e}"
             ))),
         }
     }
@@ -248,8 +285,7 @@ impl AppConfig {
             .cloned()
             .ok_or_else(|| {
                 ConfigError::Message(format!(
-                    "Profile '{}' not found in configuration",
-                    profile_name
+                    "Profile '{profile_name}' not found in configuration"
                 ))
             })?;
 
@@ -265,6 +301,18 @@ impl AppConfig {
         let api_key = profile
             .api_key
             .or_else(|| all_profile.and_then(|all| all.api_key.clone()));
+
+        let anthropic_api_key = profile
+            .anthropic_api_key
+            .or_else(|| all_profile.and_then(|all| all.anthropic_api_key.clone()));
+
+        let anthropic_oauth = profile
+            .anthropic_oauth
+            .or_else(|| all_profile.and_then(|all| all.anthropic_oauth.clone()));
+
+        let provider = profile
+            .provider
+            .or_else(|| all_profile.and_then(|all| all.provider.clone()));
 
         // Apply inheritance for tool settings
         let allowed_tools = profile
@@ -285,11 +333,17 @@ impl AppConfig {
 
         // Override with environment variables if present
         let api_key = std::env::var("STAKPAK_API_KEY").ok().or(api_key);
+        let anthropic_api_key = std::env::var("ANTHROPIC_API_KEY")
+            .ok()
+            .or(anthropic_api_key);
         let api_endpoint = std::env::var("STAKPAK_API_ENDPOINT").unwrap_or(api_endpoint);
 
-        let app_config = AppConfig {
+        let app_config = Self {
             api_endpoint,
             api_key,
+            anthropic_api_key,
+            anthropic_oauth,
+            provider,
             mcp_server_host: None, // This can be added to profiles later if needed
             machine_name: config_file.settings.machine_name,
             auto_append_gitignore: config_file.settings.auto_append_gitignore,
@@ -304,7 +358,7 @@ impl AppConfig {
         if is_config_file_dirty {
             // fail without crashing, because it's not critical
             if let Err(e) = app_config.save() {
-                eprintln!("Warning: Failed to update config on load: {}", e);
+                eprintln!("Warning: Failed to update config on load: {e}");
             }
         }
 
@@ -322,10 +376,10 @@ impl AppConfig {
         }
 
         let content = std::fs::read_to_string(&config_path)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
+            .map_err(|e| format!("Failed to read config file: {e}"))?;
 
         let config_file: ConfigFile =
-            toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {}", e))?;
+            toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))?;
 
         let mut profiles: Vec<String> = config_file
             .profiles
@@ -342,6 +396,38 @@ impl AppConfig {
         Ok(profiles)
     }
 
+    /// Update the provider for a specific profile
+    pub fn update_profile_provider(
+        config_path: &str,
+        profile_name: &str,
+        provider: Option<String>,
+    ) -> Result<(), String> {
+        // Load the config file
+        let mut config_file = Self::load_config_file(config_path)
+            .map_err(|e| format!("Failed to load config: {e}"))?;
+
+        // Update the profile's provider field
+        if let Some(profile) = config_file.profiles.get_mut(profile_name) {
+            profile.provider = provider;
+        } else {
+            return Err(format!("Profile '{profile_name}' not found"));
+        }
+
+        // Save the updated config
+        let config_str = toml::to_string_pretty(&config_file)
+            .map_err(|e| format!("Failed to serialize config: {e}"))?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = Path::new(config_path).parent() {
+            create_dir_all(parent)
+                .map_err(|e| format!("Failed to create config directory: {e}"))?;
+        }
+
+        write(config_path, config_str).map_err(|e| format!("Failed to save config: {e}"))?;
+
+        Ok(())
+    }
+
     /// Get profile display info
     pub fn get_profile_info(
         profile_name: &str,
@@ -349,16 +435,20 @@ impl AppConfig {
     ) -> Result<ProfileInfo, String> {
         let config = Self::load(profile_name, custom_config_path).map_err(|e| e.to_string())?;
 
+        // Check if any credentials are present (Stakpak or Anthropic)
+        let has_any_credentials = config.api_key.is_some()
+            || config.anthropic_api_key.is_some()
+            || config.anthropic_oauth.is_some();
+
         Ok(ProfileInfo {
             name: profile_name.to_string(),
-            has_api_key: config.api_key.is_some(),
-            allowed_tools_count: config.allowed_tools.as_ref().map(|t| t.len()).unwrap_or(0),
-            auto_approve_count: config.auto_approve.as_ref().map(|t| t.len()).unwrap_or(0),
+            has_api_key: has_any_credentials,
+            allowed_tools_count: config.allowed_tools.as_ref().map_or(0, std::vec::Vec::len),
+            auto_approve_count: config.auto_approve.as_ref().map_or(0, std::vec::Vec::len),
             is_restricted: config
                 .allowed_tools
                 .as_ref()
-                .map(|t| t.len() < 5)
-                .unwrap_or(false),
+                .is_some_and(|t| t.len() < 5),
         })
     }
 
@@ -366,9 +456,9 @@ impl AppConfig {
         // Load existing config or create new one
         let mut config_file = if Path::new(&self.config_path).exists() {
             let content = std::fs::read_to_string(&self.config_path)
-                .map_err(|e| format!("Failed to read config file: {}", e))?;
+                .map_err(|e| format!("Failed to read config file: {e}"))?;
             toml::from_str::<ConfigFile>(&content)
-                .map_err(|e| format!("Failed to parse config file: {}", e))?
+                .map_err(|e| format!("Failed to parse config file: {e}"))?
         } else {
             ConfigFile {
                 profiles: HashMap::new(),
@@ -385,6 +475,9 @@ impl AppConfig {
             ProfileConfig {
                 api_endpoint: Some(self.api_endpoint.clone()),
                 api_key: self.api_key.clone(),
+                anthropic_api_key: self.anthropic_api_key.clone(),
+                anthropic_oauth: self.anthropic_oauth.clone(),
+                provider: self.provider.clone(),
                 allowed_tools: self.allowed_tools.clone(),
                 auto_approve: self.auto_approve.clone(),
                 rulebooks: self.rulebooks.clone(),
@@ -399,11 +492,11 @@ impl AppConfig {
         };
 
         if let Some(parent) = Path::new(&self.config_path).parent() {
-            create_dir_all(parent).map_err(|e| format!("{}", e))?;
+            create_dir_all(parent).map_err(|e| format!("{e}"))?;
         }
 
-        let config_str = toml::to_string_pretty(&config_file).map_err(|e| format!("{}", e))?;
-        write(&self.config_path, config_str).map_err(|e| format!("{}", e))
+        let config_str = toml::to_string_pretty(&config_file).map_err(|e| format!("{e}"))?;
+        write(&self.config_path, config_str).map_err(|e| format!("{e}"))
     }
 }
 

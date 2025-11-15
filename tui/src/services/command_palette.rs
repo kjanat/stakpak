@@ -22,6 +22,7 @@ pub enum CommandAction {
     OpenShortcuts,
     ResumeSession,
     ShowStatus,
+    SwitchProvider,
     MemorizeConversation,
     SubmitIssue,
     GetSupport,
@@ -96,6 +97,12 @@ pub fn get_all_commands() -> Vec<Command> {
             "Show account information",
             "/status",
             CommandAction::ShowStatus,
+        ),
+        Command::new(
+            "Provider",
+            "Switch provider (stakpak/anthropic)",
+            "/provider",
+            CommandAction::SwitchProvider,
         ),
         Command::new(
             "Memorize",
