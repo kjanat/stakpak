@@ -61,12 +61,13 @@ impl StakpakAcpAgent {
         session_update_tx: mpsc::UnboundedSender<(acp::SessionNotification, oneshot::Sender<()>)>,
         system_prompt: Option<String>,
     ) -> Result<Self, String> {
-        let api_config: ClientConfig = config.clone().into();
-
         // Check if we have ANY valid credentials (Stakpak, Anthropic API key, or Anthropic OAuth)
-        let has_credentials = api_config.api_key.is_some()
-            || api_config.anthropic_api_key.is_some()
-            || api_config.anthropic_oauth.is_some();
+        // Check on config before conversion for consistency with has_valid_credentials()
+        let has_credentials = config.api_key.is_some()
+            || config.anthropic_api_key.is_some()
+            || config.anthropic_oauth.is_some();
+
+        let api_config: ClientConfig = config.clone().into();
 
         // If no credentials at all, create a dummy client that will fail on first use
         // The user will be prompted during authenticate/new_session
